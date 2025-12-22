@@ -10,7 +10,7 @@ Smith is a fast, open-source AI coding agent that runs in your terminal.
 ## Getting Started
 
 ```bash
-git clone https://github.com/NotAGIYet/smith.git
+git clone https://github.com/buyukakyuz/smith.git
 cd smith
 cargo build --release
 ./target/release/smith
