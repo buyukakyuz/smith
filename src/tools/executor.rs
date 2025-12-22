@@ -80,7 +80,10 @@ impl<'a> ToolExecutor<'a> {
         let mut results = Vec::new();
 
         for content_block in &assistant_message.content {
-            if let ContentBlock::ToolUse { id, name, input } = content_block {
+            if let ContentBlock::ToolUse {
+                id, name, input, ..
+            } = content_block
+            {
                 let tool_type = ToolType::from_name(name);
 
                 let permission_denial = match self.check_permission(&tool_type, input) {

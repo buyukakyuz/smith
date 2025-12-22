@@ -12,7 +12,7 @@ use smith::tui;
 use config::AppConfig;
 use core::prompt::{PromptBuilder, TemplateType};
 use core::{AgentError, AugmentedLLM, LLM, LoopConfig, Result};
-use providers::{AnthropicProvider, ApiKey, OpenAIClient};
+use providers::{AnthropicProvider, ApiKey, GeminiProvider, OpenAIClient};
 use tools::ToolEventEmitter;
 
 #[derive(Parser, Debug)]
@@ -74,6 +74,8 @@ fn infer_provider(model: &str) -> Option<&'static str> {
         Some("anthropic")
     } else if model.starts_with("gpt") || model.starts_with("o1") || model.starts_with("o3") {
         Some("openai")
+    } else if model.starts_with("gemini") {
+        Some("gemini")
     } else {
         None
     }
@@ -101,8 +103,16 @@ fn create_provider(cli: &Cli, config: &AppConfig) -> Result<Arc<dyn LLM>> {
             }
             Ok(Arc::new(provider))
         }
+        "gemini" => {
+            let mut provider =
+                GeminiProvider::from_env().map_err(|e| AgentError::Config(e.to_string()))?;
+            if let Some(m) = model {
+                provider = provider.with_model(m);
+            }
+            Ok(Arc::new(provider))
+        }
         other => Err(AgentError::Config(format!(
-            "Unknown provider: {other}. Use a model starting with 'claude', 'gpt'"
+            "Unknown provider: {other}. Use a model starting with 'claude', 'gpt', or 'gemini'"
         ))),
     }
 }
@@ -120,6 +130,8 @@ fn create_agent(llm: &Arc<dyn LLM>, cli: &Cli, config: &AppConfig) -> Result<Aug
             let name_lower = llm.name().to_lowercase();
             let template_type = if name_lower.contains("gpt") || name_lower.contains("openai") {
                 TemplateType::OpenAI
+            } else if name_lower.contains("gemini") {
+                TemplateType::Gemini
             } else {
                 TemplateType::Claude
             };

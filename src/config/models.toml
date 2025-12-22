@@ -30,12 +30,24 @@ default = false
 
 [[openai]]
 id = "gpt-5-mini"
-name = "GPT-5 mini"
+name = "GPT-5 Mini"
 max_tokens = 64000
 default = false
 
 [[openai]]
 id = "gpt-5-nano"
-name = "GPT-5 nano"
+name = "GPT-5 Nano"
 max_tokens = 64000
+default = false
+
+[[gemini]]
+id = "gemini-3-pro-preview"
+name = "Gemini-3 Pro"
+max_tokens = 65536
+default = false
+
+[[gemini]]
+id = "gemini-3-flash-preview"
+name = "Gemini-3 Flash"
+max_tokens = 65536
 default = false

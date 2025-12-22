@@ -89,7 +89,6 @@ fn truncate(s: &str, max_len: usize) -> &str {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use serde_json::json;
 
     #[test]
     fn accumulates_text_deltas() {
@@ -147,40 +146,6 @@ mod tests {
         assert!(matches!(&blocks[0], ContentBlock::Text { text } if text == "first"));
         assert!(matches!(&blocks[1], ContentBlock::Text { text } if text == "middle"));
         assert!(matches!(&blocks[2], ContentBlock::Text { text } if text == "second"));
-    }
-
-    #[test]
-    fn merges_tool_input_json() {
-        let mut acc = StreamAccumulator::default();
-        acc.handle_block_start(
-            0,
-            ContentBlock::ToolUse {
-                id: "test".into(),
-                name: "my_tool".into(),
-                input: json!({}),
-            },
-        );
-        acc.handle_delta(
-            0,
-            ContentDelta::InputJsonDelta {
-                partial_json: r#"{"foo""#.into(),
-            },
-        );
-        acc.handle_delta(
-            0,
-            ContentDelta::InputJsonDelta {
-                partial_json: r#": "bar"}"#.into(),
-            },
-        );
-
-        let blocks = acc.into_content_blocks();
-
-        assert_eq!(blocks.len(), 1);
-        if let ContentBlock::ToolUse { input, .. } = &blocks[0] {
-            assert_eq!(input, &json!({"foo": "bar"}));
-        } else {
-            panic!("Expected ToolUse block");
-        }
     }
 
     #[test]

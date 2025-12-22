@@ -4,6 +4,7 @@ pub mod http;
 pub mod types;
 
 pub mod anthropic;
+pub mod gemini;
 pub mod mock;
 pub mod openai;
 
@@ -11,6 +12,7 @@ pub use factory::create_provider_from_model;
 pub use types::ApiKey;
 
 pub use anthropic::AnthropicProvider;
+pub use gemini::GeminiProvider;
 pub use openai::OpenAIProvider;
 
 pub type OpenAIClient = OpenAIProvider;

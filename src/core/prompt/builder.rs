@@ -57,6 +57,9 @@ impl PromptBuilder {
                 TemplateType::OpenAI => {
                     prompt.push_str(&format!("\nModel: {name} ({id})\n"));
                 }
+                TemplateType::Gemini => {
+                    prompt.push_str(&format!("\nModel: {name} ({id})\n"));
+                }
             }
         }
 

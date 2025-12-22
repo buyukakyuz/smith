@@ -63,7 +63,9 @@ fn to_api_content_block(block: &ContentBlock) -> ApiContentBlock {
         ContentBlock::RedactedThinking { data } => {
             ApiContentBlock::RedactedThinking { data: data.clone() }
         }
-        ContentBlock::ToolUse { id, name, input } => ApiContentBlock::ToolUse {
+        ContentBlock::ToolUse {
+            id, name, input, ..
+        } => ApiContentBlock::ToolUse {
             id: id.clone(),
             name: name.clone(),
             input: input.clone(),
@@ -132,7 +134,12 @@ fn from_api_content_block(block: ApiContentBlock) -> ContentBlock {
             signature,
         },
         ApiContentBlock::RedactedThinking { data } => ContentBlock::RedactedThinking { data },
-        ApiContentBlock::ToolUse { id, name, input } => ContentBlock::ToolUse { id, name, input },
+        ApiContentBlock::ToolUse { id, name, input } => ContentBlock::ToolUse {
+            id,
+            name,
+            input,
+            signature: None,
+        },
         ApiContentBlock::ToolResult {
             tool_use_id,
             content,

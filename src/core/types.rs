@@ -29,6 +29,8 @@ pub enum ContentBlock {
         id: String,
         name: String,
         input: serde_json::Value,
+        #[serde(skip_serializing_if = "Option::is_none")]
+        signature: Option<String>,
     },
     ToolResult {
         tool_use_id: String,
@@ -60,6 +62,7 @@ impl ContentBlock {
             id: Uuid::new_v4().to_string(),
             name: name.into(),
             input,
+            signature: None,
         }
     }
 

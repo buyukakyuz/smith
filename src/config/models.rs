@@ -21,6 +21,8 @@ pub struct ModelsConfig {
     #[serde(default)]
     pub openai: Vec<ModelInfo>,
     #[serde(default)]
+    pub gemini: Vec<ModelInfo>,
+    #[serde(default)]
     pub custom: Vec<ModelInfo>,
 }
 pub struct ModelRegistry {
@@ -68,6 +70,10 @@ impl ModelRegistry {
             models_by_provider.insert("openai".to_string(), config.openai);
         }
 
+        if !config.gemini.is_empty() {
+            models_by_provider.insert("gemini".to_string(), config.gemini);
+        }
+
         if !config.custom.is_empty() {
             models_by_provider.insert("custom".to_string(), config.custom);
         }
@@ -84,7 +90,7 @@ impl ModelRegistry {
     #[must_use]
     pub fn all_models_by_provider(&self) -> Vec<(&str, &[ModelInfo])> {
         let mut result = Vec::new();
-        for provider in ["anthropic", "openai", "custom"] {
+        for provider in ["anthropic", "openai", "gemini", "custom"] {
             if let Some(models) = self.models_by_provider.get(provider) {
                 if !models.is_empty() {
                     result.push((provider, models.as_slice()));
