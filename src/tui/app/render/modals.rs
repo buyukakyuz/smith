@@ -1,5 +1,4 @@
 use crate::permission::types::PermissionRequest;
-use crate::tui::state::ModelPickerModal;
 use crate::ui::theme::Theme;
 use ratatui::Frame;
 use ratatui::layout::{Alignment, Constraint, Layout, Rect};
@@ -188,9 +187,15 @@ pub fn render_permission_modal(
     }
 }
 
-pub fn render_model_picker_modal(frame: &mut Frame, area: Rect, modal: &ModelPickerModal) {
+pub fn render_model_picker_modal(
+    frame: &mut Frame,
+    area: Rect,
+    models: &[(String, Vec<crate::tui::state::PickerModel>)],
+    selected: usize,
+    total_count: usize,
+) {
     let modal_width = (f32::from(area.width) * 0.5).max(40.0).min(60.0) as u16;
-    let content_height = modal.total_models as u16 + modal.models.len() as u16 + 2;
+    let content_height = total_count as u16 + models.len() as u16 + 2;
     let modal_height = content_height.min(area.height.saturating_sub(4)) + 4;
 
     let modal_x = (area.width.saturating_sub(modal_width)) / 2;
@@ -220,7 +225,7 @@ pub fn render_model_picker_modal(frame: &mut Frame, area: Rect, modal: &ModelPic
     let mut y = chunks[0].y;
     let mut flat_idx = 0;
 
-    for (provider, models) in &modal.models {
+    for (provider, provider_models) in models {
         let provider_line = Line::from(Span::styled(format!("  {provider}"), Theme::secondary()));
         frame.render_widget(
             Paragraph::new(provider_line),
@@ -233,12 +238,12 @@ pub fn render_model_picker_modal(frame: &mut Frame, area: Rect, modal: &ModelPic
         );
         y += 1;
 
-        for model in models {
+        for model in provider_models {
             if y >= chunks[0].y + chunks[0].height {
                 break;
             }
 
-            let is_selected = flat_idx == modal.selected;
+            let is_selected = flat_idx == selected;
             let prefix = if is_selected { "  ▸ " } else { "    " };
 
             let style = if is_selected {

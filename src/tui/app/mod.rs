@@ -99,9 +99,9 @@ impl TuiApp {
             let permission_modal = self.state.permission_modal.as_ref().map(|m| {
                 (
                     m.request.clone(),
-                    m.selected,
-                    m.input_mode,
-                    m.feedback_input.clone(),
+                    m.selected_index(),
+                    m.is_input_mode(),
+                    m.feedback().to_string(),
                 )
             });
 
@@ -109,7 +109,7 @@ impl TuiApp {
                 .state
                 .model_picker_modal
                 .as_ref()
-                .map(|m| (m.models.clone(), m.selected, m.total_models));
+                .map(|m| (m.models.clone(), m.selected, m.total_count()));
 
             self.terminal.draw(|f| {
                 let layout = calculate_layout(f.area());
@@ -129,13 +129,7 @@ impl TuiApp {
                 }
 
                 if let Some((models, selected, total)) = &model_picker_modal {
-                    use crate::tui::state::ModelPickerModal;
-                    let modal = ModelPickerModal {
-                        models: models.clone(),
-                        selected: *selected,
-                        total_models: *total,
-                    };
-                    render_model_picker_modal(f, f.area(), &modal);
+                    render_model_picker_modal(f, f.area(), models, *selected, *total);
                 }
             })?;
 
@@ -342,24 +336,15 @@ impl TuiApp {
                 self.state.permission_select_next();
             }
             KeyCode::Char('1') => {
-                if let Some(modal) = &mut self.state.permission_modal {
-                    modal.selected = 0;
-                    modal.input_mode = false;
-                }
+                self.state.permission_set_selection(0);
                 self.state.permission_confirm();
             }
             KeyCode::Char('2') => {
-                if let Some(modal) = &mut self.state.permission_modal {
-                    modal.selected = 1;
-                    modal.input_mode = false;
-                }
+                self.state.permission_set_selection(1);
                 self.state.permission_confirm();
             }
             KeyCode::Char('3') | KeyCode::Char('n') => {
-                if let Some(modal) = &mut self.state.permission_modal {
-                    modal.selected = 2;
-                    modal.input_mode = true;
-                }
+                self.state.permission_set_selection(2);
             }
             KeyCode::Enter => {
                 if let Some(feedback) = self.state.permission_confirm() {
@@ -370,10 +355,7 @@ impl TuiApp {
                 self.state.permission_cancel();
             }
             KeyCode::Char('y') => {
-                if let Some(modal) = &mut self.state.permission_modal {
-                    modal.selected = 0;
-                    modal.input_mode = false;
-                }
+                self.state.permission_set_selection(0);
                 self.state.permission_confirm();
             }
             _ => {}
