@@ -109,6 +109,7 @@ impl ToolCard {
         self.show_preview && !self.output_lines.is_empty() && self.state == ToolState::Success
     }
 
+    #[must_use]
     pub fn render_to_lines(&self, width: u16) -> Vec<Line<'static>> {
         if width < 20 {
             return vec![];
@@ -127,7 +128,7 @@ impl ToolCard {
             lines.extend(self.build_preview_lines(content_width, state_style));
         }
 
-        lines.push(self.build_bottom_border_line(width_usize, state_style));
+        lines.push(Self::build_bottom_border_line(width_usize, state_style));
 
         lines
     }
@@ -203,7 +204,7 @@ impl ToolCard {
             .take(self.max_preview_lines)
         {
             let line_num = format!("{:3} │ ", i + 1);
-            let line_content = self.truncate_line(line, line_num.width(), content_width);
+            let line_content = Self::truncate_line(line, line_num.width(), content_width);
             let padding = content_width.saturating_sub(line_num.width() + line_content.width());
 
             let preview_line = Line::from(vec![
@@ -241,7 +242,7 @@ impl ToolCard {
         lines
     }
 
-    fn truncate_line(&self, line: &str, prefix_width: usize, content_width: usize) -> String {
+    fn truncate_line(line: &str, prefix_width: usize, content_width: usize) -> String {
         if line.width() + prefix_width > content_width {
             let max_len = content_width.saturating_sub(prefix_width).saturating_sub(3);
             format!("{}...", line.chars().take(max_len).collect::<String>())
@@ -250,7 +251,7 @@ impl ToolCard {
         }
     }
 
-    fn build_bottom_border_line(&self, width: usize, state_style: Style) -> Line<'static> {
+    fn build_bottom_border_line(width: usize, state_style: Style) -> Line<'static> {
         Line::from(vec![Span::styled(
             format!(
                 "{}{}{}",
@@ -272,7 +273,7 @@ struct RenderContext<'a> {
 }
 
 impl<'a> RenderContext<'a> {
-    fn new(card: &'a ToolCard, area: Rect) -> Self {
+    const fn new(card: &'a ToolCard, area: Rect) -> Self {
         let width = area.width as usize;
         Self {
             card,
@@ -382,9 +383,7 @@ impl<'a> RenderContext<'a> {
 
     fn render_numbered_line(&self, buf: &mut Buffer, y: u16, num: usize, line: &str) {
         let line_num = format!("{num:3} │ ");
-        let line_content = self
-            .card
-            .truncate_line(line, line_num.width(), self.content_width);
+        let line_content = ToolCard::truncate_line(line, line_num.width(), self.content_width);
         let padding = self
             .content_width
             .saturating_sub(line_num.width() + line_content.width());
