@@ -243,6 +243,7 @@ impl DiffWidget {
         lines
     }
 
+    #[must_use]
     pub fn render_to_lines(&self, width: u16) -> Vec<Line<'static>> {
         if width < 20 {
             return vec![];
