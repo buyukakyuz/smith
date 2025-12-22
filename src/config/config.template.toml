@@ -1,0 +1,5 @@
+# Smith Configuration
+
+# provider = "anthropic"
+# model = "claude-sonnet-4-20250514"
+# custom_system_prompt = ""

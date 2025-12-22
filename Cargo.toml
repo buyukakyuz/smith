@@ -1,0 +1,80 @@
+[package]
+name = "smith"
+version = "0.1.0"
+edition = "2024"
+authors = ["Kerim Buyukakyuz"]
+description = "High-performance AI developer tool"
+license = "MIT"
+
+[dependencies]
+tokio = { version = "1", features = ["full"] }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1.0.145"
+async-trait = "0.1.89"
+thiserror = "2.0.17"
+uuid = { version = "1", features = ["v4", "serde"] }
+futures = "0.3.31"
+schemars = "1.1.0"
+reqwest = { version = "0.12.26", features = ["json", "stream"] }
+reqwest-middleware = "0.4"
+reqwest-retry = "0.7"
+bytes = "1"
+clap = { version = "4.5.53", features = ["derive"] }
+tokio-stream = "0.1.17"
+tracing = "0.1.43"
+tracing-subscriber = { version = "0.3", features = ["env-filter"] }
+chrono = { version = "0.4.42", features = ["serde"] }
+toml = "0.9"
+config = "0.15"
+glob = "0.3"
+regex = "1"
+ignore = "0.4"
+content_inspector = "0.2"
+globset = "0.4"
+grep-regex = "0.1"
+grep-searcher = "0.1"
+textwrap = "0.16"
+unicode-width = "0.2"
+similar = { version = "2.6", features = ["inline"] }
+parking_lot = "0.12"
+
+ratatui = "0.29.0"
+crossterm = "0.28"
+tui-textarea = "0.7"
+syntect = "5"
+
+terminal_size = "0.4"
+markdown = "1.0.0"
+
+[dev-dependencies]
+tempfile = "3"
+assert_cmd = "2"
+predicates = "3"
+tokio-test = "0.4"
+
+[lib]
+name = "smith"
+path = "src/lib.rs"
+
+[[bin]]
+name = "smith"
+path = "src/main.rs"
+
+[features]
+default = []
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+pedantic = "warn"
+all = "warn"
+nursery = "warn"
+unwrap_used = "warn"
+expect_used = "warn"
+missing_errors_doc = "allow"
+missing_panics_doc = "allow"
+missing_safety_doc = "allow"
+
+[profile.dev.package."*"]
+debug = false
