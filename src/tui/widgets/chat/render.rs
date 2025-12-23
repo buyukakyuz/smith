@@ -5,7 +5,7 @@ use ratatui::text::{Line, Span};
 use super::ChatMessage;
 use crate::tools::{ToolState, ToolType};
 use crate::ui::diff::DiffWidget;
-use crate::ui::markdown_widget::MarkdownWidget;
+use crate::ui::markdown::MarkdownWidget;
 use crate::ui::output_widget::MessageLevel;
 use crate::ui::theme::Theme;
 use crate::ui::tool_card::ToolCard;
