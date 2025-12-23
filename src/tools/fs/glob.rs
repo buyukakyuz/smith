@@ -8,27 +8,9 @@ use std::time::SystemTime;
 use crate::core::error::{AgentError, Result};
 use crate::tools::{ToolType, TypedTool};
 
+use super::constants::{GLOB_DEFAULT_LIMIT, GLOB_MAX_LIMIT, default_respect_gitignore};
+use super::format::format_time_ago;
 use super::{validate_absolute_path, validate_path_exists, walk_builder_with_gitignore};
-const DEFAULT_LIMIT: usize = 100;
-const MAX_LIMIT: usize = 1000;
-
-fn format_time_ago(modified: SystemTime) -> String {
-    match modified.elapsed() {
-        Ok(elapsed) => {
-            let secs = elapsed.as_secs();
-            if secs < 60 {
-                format!("{secs}s ago")
-            } else if secs < 3600 {
-                format!("{}m ago", secs / 60)
-            } else if secs < 86400 {
-                format!("{}h ago", secs / 3600)
-            } else {
-                format!("{}d ago", secs / 86400)
-            }
-        }
-        Err(_) => "unknown".to_string(),
-    }
-}
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GlobInput {
@@ -37,7 +19,7 @@ pub struct GlobInput {
     #[serde(default)]
     pub base_dir: Option<String>,
 
-    #[serde(default = "default_limit")]
+    #[serde(default = "glob_default_limit")]
     pub limit: usize,
 
     #[serde(default = "default_respect_gitignore")]
@@ -45,12 +27,8 @@ pub struct GlobInput {
     pub respect_gitignore: bool,
 }
 
-const fn default_limit() -> usize {
-    DEFAULT_LIMIT
-}
-
-const fn default_respect_gitignore() -> bool {
-    true
+const fn glob_default_limit() -> usize {
+    GLOB_DEFAULT_LIMIT
 }
 
 pub struct GlobTool;
@@ -81,7 +59,7 @@ impl TypedTool for GlobTool {
     }
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
-        let limit = input.limit.min(MAX_LIMIT);
+        let limit = input.limit.min(GLOB_MAX_LIMIT);
 
         let base_dir = if let Some(base) = &input.base_dir {
             let base_path = validate_absolute_path(base, ToolType::Glob)?;

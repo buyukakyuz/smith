@@ -3,30 +3,14 @@ use schemars::JsonSchema;
 use serde::Deserialize;
 
 use crate::core::error::Result;
+use crate::tools::ToolType;
 use crate::tools::TypedTool;
 
+use super::constants::{LIST_MAX_DEPTH, default_respect_gitignore};
+use super::format::format_size;
 use super::{
     validate_absolute_path, validate_is_dir, validate_path_exists, walk_builder_with_gitignore,
 };
-use crate::tools::ToolType;
-
-const MAX_DEPTH: usize = 5;
-
-fn format_size(size: u64) -> String {
-    const KB: u64 = 1024;
-    const MB: u64 = KB * 1024;
-    const GB: u64 = MB * 1024;
-
-    if size >= GB {
-        format!("{:.1} GB", size as f64 / GB as f64)
-    } else if size >= MB {
-        format!("{:.1} MB", size as f64 / MB as f64)
-    } else if size >= KB {
-        format!("{:.1} KB", size as f64 / KB as f64)
-    } else {
-        format!("{size} B")
-    }
-}
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListDirInput {
@@ -48,10 +32,6 @@ pub struct ListDirInput {
 
 fn default_sort() -> String {
     "name".to_string()
-}
-
-const fn default_respect_gitignore() -> bool {
-    true
 }
 
 pub struct ListDirTool;
@@ -84,7 +64,7 @@ impl TypedTool for ListDirTool {
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
         let path = validate_absolute_path(&input.path, ToolType::ListDir)?;
 
-        let depth = input.depth.min(MAX_DEPTH);
+        let depth = input.depth.min(LIST_MAX_DEPTH);
 
         validate_path_exists(&path, ToolType::ListDir)?;
         validate_is_dir(&path, ToolType::ListDir)?;
@@ -357,13 +337,5 @@ mod tests {
         let result = tool.execute_typed(input).await.unwrap();
         assert!(result.contains("visible.txt"));
         assert!(result.contains("ignored.txt"));
-    }
-
-    #[test]
-    fn test_format_size() {
-        assert_eq!(format_size(100), "100 B");
-        assert_eq!(format_size(1024), "1.0 KB");
-        assert_eq!(format_size(1024 * 1024), "1.0 MB");
-        assert_eq!(format_size(1024 * 1024 * 1024), "1.0 GB");
     }
 }

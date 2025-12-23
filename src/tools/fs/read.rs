@@ -6,33 +6,32 @@ use std::fs::File;
 use std::io::Read;
 
 use crate::core::error::{AgentError, Result};
+use crate::tools::ToolType;
 use crate::tools::TypedTool;
 
+use super::constants::{
+    READ_BINARY_CHECK_SIZE, READ_DEFAULT_LIMIT, READ_DEFAULT_OFFSET, READ_MAX_LIMIT,
+    READ_MAX_LINE_LENGTH,
+};
 use super::{validate_absolute_path, validate_file_size, validate_is_file, validate_path_exists};
-use crate::tools::ToolType;
-const BINARY_CHECK_SIZE: usize = 8192;
-const DEFAULT_OFFSET: usize = 1;
-const DEFAULT_LIMIT: usize = 2000;
-const MAX_LIMIT: usize = 10_000;
-const MAX_LINE_LENGTH: usize = 500;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ReadFileInput {
     pub path: String,
 
-    #[serde(default = "default_offset")]
+    #[serde(default = "read_default_offset")]
     pub offset: usize,
 
-    #[serde(default = "default_limit")]
+    #[serde(default = "read_default_limit")]
     pub limit: usize,
 }
 
-const fn default_offset() -> usize {
-    DEFAULT_OFFSET
+const fn read_default_offset() -> usize {
+    READ_DEFAULT_OFFSET
 }
 
-const fn default_limit() -> usize {
-    DEFAULT_LIMIT
+const fn read_default_limit() -> usize {
+    READ_DEFAULT_LIMIT
 }
 
 pub struct ReadFileTool;
@@ -65,14 +64,14 @@ impl TypedTool for ReadFileTool {
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
         let path = validate_absolute_path(&input.path, ToolType::ReadFile)?;
 
-        let limit = input.limit.min(MAX_LIMIT);
+        let limit = input.limit.min(READ_MAX_LIMIT);
 
         validate_path_exists(&path, ToolType::ReadFile)?;
         validate_is_file(&path, ToolType::ReadFile)?;
         let file_size = validate_file_size(&path, ToolType::ReadFile)?;
 
         let mut file = File::open(&path)?;
-        let mut buffer = vec![0u8; BINARY_CHECK_SIZE.min(file_size as usize)];
+        let mut buffer = vec![0u8; READ_BINARY_CHECK_SIZE.min(file_size as usize)];
         let bytes_read = file.read(&mut buffer)?;
         buffer.truncate(bytes_read);
 
@@ -130,8 +129,8 @@ impl TypedTool for ReadFileTool {
         for (idx, line) in selected_lines.iter().enumerate() {
             let line_num = start_idx + idx + 1;
 
-            let formatted_line = if line.len() > MAX_LINE_LENGTH {
-                format!("{}... [truncated]", &line[..MAX_LINE_LENGTH])
+            let formatted_line = if line.len() > READ_MAX_LINE_LENGTH {
+                format!("{}... [truncated]", &line[..READ_MAX_LINE_LENGTH])
             } else {
                 (*line).to_string()
             };

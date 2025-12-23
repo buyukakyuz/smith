@@ -11,11 +11,10 @@ use std::sync::{Arc, Mutex};
 use crate::core::error::{AgentError, Result};
 use crate::tools::{ToolType, TypedTool};
 
+use super::constants::{
+    GREP_DEFAULT_LIMIT, GREP_MAX_CONTEXT, GREP_MAX_LIMIT, default_respect_gitignore,
+};
 use super::{validate_absolute_path, validate_path_exists, walk_builder_with_gitignore};
-
-const DEFAULT_LIMIT: usize = 50;
-const MAX_LIMIT: usize = 500;
-const MAX_CONTEXT: usize = 5;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GrepInput {
@@ -30,7 +29,7 @@ pub struct GrepInput {
     #[serde(default)]
     pub ignore_case: bool,
 
-    #[serde(default = "default_limit")]
+    #[serde(default = "grep_default_limit")]
     pub limit: usize,
 
     #[serde(default)]
@@ -41,12 +40,8 @@ pub struct GrepInput {
     pub respect_gitignore: bool,
 }
 
-const fn default_limit() -> usize {
-    DEFAULT_LIMIT
-}
-
-const fn default_respect_gitignore() -> bool {
-    true
+const fn grep_default_limit() -> usize {
+    GREP_DEFAULT_LIMIT
 }
 
 #[derive(Clone)]
@@ -153,8 +148,8 @@ impl TypedTool for GrepTool {
     }
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
-        let limit = input.limit.min(MAX_LIMIT);
-        let context = input.context.min(MAX_CONTEXT);
+        let limit = input.limit.min(GREP_MAX_LIMIT);
+        let context = input.context.min(GREP_MAX_CONTEXT);
 
         let matcher = RegexMatcherBuilder::new()
             .case_insensitive(input.ignore_case)

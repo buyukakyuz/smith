@@ -6,12 +6,11 @@ use std::time::Instant;
 
 use crate::core::error::{AgentError, Result};
 use crate::core::metadata;
+use crate::tools::ToolType;
 use crate::tools::TypedTool;
 
+use super::constants::MAX_WRITE_SIZE;
 use super::validate_absolute_path;
-use crate::tools::ToolType;
-
-const MAX_WRITE_SIZE: usize = 10 * 1024 * 1024;
 
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct WriteFileInput {

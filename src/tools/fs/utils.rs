@@ -5,7 +5,7 @@ use ignore::WalkBuilder;
 use crate::core::error::{AgentError, Result};
 use crate::tools::types::ToolType;
 
-pub const MAX_FILE_SIZE: u64 = 10 * 1024 * 1024;
+use super::constants::MAX_FILE_SIZE;
 
 pub fn is_absolute_path(path: &str) -> bool {
     Path::new(path).is_absolute()
