@@ -1,5 +1,3 @@
-//! CLI argument definitions.
-
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
 
