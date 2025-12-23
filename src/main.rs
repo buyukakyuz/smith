@@ -7,6 +7,8 @@ use clap::Parser;
 
 #[tokio::main]
 async fn main() -> Result<()> {
+    let _log_guard = smith::logging::init();
+
     let cli = Cli::parse();
     let config = AppConfig::load();
 
