@@ -1,5 +1,5 @@
 use crate::core::error::Result;
-use crate::core::types::Message;
+use crate::core::types::{Message, Usage};
 use crate::permission::types::{PermissionRequest, PermissionResponse};
 use crate::tools::events::{ToolEvent, ToolEventHandler};
 use crate::tools::result::ToolResult;
@@ -15,7 +15,7 @@ pub enum AppEvent {
     MouseScroll(i16),
     Resize(u16, u16),
     LLMChunk(String),
-    LLMComplete(Message),
+    LLMComplete(Message, Usage),
     LLMError(String),
     ToolStarted {
         name: String,

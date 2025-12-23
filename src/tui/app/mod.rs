@@ -95,6 +95,8 @@ impl TuiApp {
             let is_processing = self.state.is_processing;
             let elapsed = self.state.elapsed();
             let spinner_frame = self.state.spinner_frame;
+            let last_usage = self.state.last_usage;
+            let session_usage = self.state.session_usage;
 
             let permission_modal = self.state.permission_modal.as_ref().map(|m| {
                 (
@@ -122,7 +124,15 @@ impl TuiApp {
 
                 self.input_widget.render(layout.input, f);
 
-                render_status(f, layout.status, is_processing, elapsed, spinner_frame);
+                render_status(
+                    f,
+                    layout.status,
+                    is_processing,
+                    elapsed,
+                    spinner_frame,
+                    last_usage.as_ref(),
+                    &session_usage,
+                );
 
                 if let Some((request, selected, input_mode, feedback)) = &permission_modal {
                     render_permission_modal(f, f.area(), request, *selected, *input_mode, feedback);
@@ -168,11 +178,12 @@ impl TuiApp {
             AppEvent::LLMChunk(chunk) => {
                 self.state.append_streaming(&chunk);
             }
-            AppEvent::LLMComplete(_message) => {
+            AppEvent::LLMComplete(_message, usage) => {
                 let text = self.state.finalize_streaming();
                 if !text.is_empty() {
                     self.state.add_assistant_message(text);
                 }
+                self.state.record_usage(usage);
                 self.state.stop_processing();
             }
             AppEvent::LLMError(error) => {

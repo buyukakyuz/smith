@@ -88,8 +88,8 @@ impl AgentRunner {
             .await;
 
         match result {
-            Ok(message) => {
-                let _ = self.event_tx.send(AppEvent::LLMComplete(message));
+            Ok((message, usage)) => {
+                let _ = self.event_tx.send(AppEvent::LLMComplete(message, usage));
             }
             Err(e) => {
                 let _ = self.event_tx.send(AppEvent::LLMError(e.to_string()));

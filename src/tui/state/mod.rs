@@ -8,6 +8,7 @@ pub use history::InputHistory;
 pub use modals::{ModelPickerModal, PermissionModal, PickerModel};
 pub use tools::ToolExecution;
 
+use crate::core::types::Usage;
 use crate::permission::types::{PermissionRequest, PermissionResponse};
 use crate::tui::widgets::{ChatMessage, ScrollState};
 use std::collections::HashMap;
@@ -26,6 +27,8 @@ pub struct AppState {
     pub active_tools: HashMap<String, ToolExecution>,
     pub permission_modal: Option<PermissionModal>,
     pub model_picker_modal: Option<ModelPickerModal>,
+    pub last_usage: Option<Usage>,
+    pub session_usage: Usage,
 
     spinner_last_update: Option<Instant>,
     request_start: Option<Instant>,
@@ -48,6 +51,8 @@ impl AppState {
             active_tools: HashMap::new(),
             permission_modal: None,
             model_picker_modal: None,
+            last_usage: None,
+            session_usage: Usage::default(),
         }
     }
 
@@ -206,6 +211,11 @@ impl AppState {
 
     pub fn history_next(&mut self) -> Option<String> {
         self.history.next()
+    }
+
+    pub fn record_usage(&mut self, usage: Usage) {
+        self.last_usage = Some(usage);
+        self.session_usage.add(&usage);
     }
 }
 

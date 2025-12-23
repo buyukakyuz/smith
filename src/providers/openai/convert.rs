@@ -259,12 +259,28 @@ pub fn parse_stream_event(event_type: Option<&str>, data: &str) -> Option<CoreSt
                 }),
             }
         }
-        "response.completed" | "response.done" => Some(CoreStreamEvent::MessageDelta {
-            delta: MessageDelta {
-                stop_reason: Some(StopReason::EndTurn),
-                usage: None,
-            },
-        }),
+        "response.completed" | "response.done" => {
+            #[derive(serde::Deserialize)]
+            struct StreamingResponseEvent {
+                response: ApiResponse,
+            }
+            let parsed: StreamingResponseEvent = serde_json::from_str(data).ok()?;
+            let usage = parsed
+                .response
+                .usage
+                .map(|u| Usage::new(u.input_tokens, u.output_tokens));
+            let stop_reason = match parsed.response.status.as_str() {
+                "completed" => StopReason::EndTurn,
+                "incomplete" => StopReason::MaxTokens,
+                _ => StopReason::EndTurn,
+            };
+            Some(CoreStreamEvent::MessageDelta {
+                delta: MessageDelta {
+                    stop_reason: Some(stop_reason),
+                    usage,
+                },
+            })
+        }
         _ => None,
     }
 }

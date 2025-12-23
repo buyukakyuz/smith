@@ -296,13 +296,34 @@ fn from_content(content: &Content) -> (Vec<ContentBlock>, bool) {
 #[must_use]
 pub fn parse_stream_event(data: &str) -> Option<CoreStreamEvent> {
     let response: ApiResponse = serde_json::from_str(data).ok()?;
-
     let candidate = response.candidates.first()?;
+
+    if candidate.finish_reason.is_some() {
+        let stop_reason = candidate
+            .finish_reason
+            .as_ref()
+            .map(|reason| match reason.as_str() {
+                "STOP" => StopReason::EndTurn,
+                "MAX_TOKENS" => StopReason::MaxTokens,
+                "STOP_SEQUENCE" => StopReason::StopSequence,
+                _ => StopReason::EndTurn,
+            })
+            .unwrap_or(StopReason::EndTurn);
+
+        return Some(CoreStreamEvent::MessageDelta {
+            delta: MessageDelta {
+                stop_reason: Some(stop_reason),
+                usage: response
+                    .usage_metadata
+                    .map(|u| Usage::new(u.prompt_token_count, u.candidates_token_count)),
+            },
+        });
+    }
 
     if let Some(content) = &candidate.content {
         for (idx, part) in content.parts.iter().enumerate() {
             match part {
-                Part::Text { text } => {
+                Part::Text { text } if !text.is_empty() => {
                     return Some(CoreStreamEvent::ContentBlockDelta {
                         index: idx,
                         delta: CoreContentDelta::TextDelta { text: text.clone() },
@@ -325,28 +346,6 @@ pub fn parse_stream_event(data: &str) -> Option<CoreStreamEvent> {
                 _ => {}
             }
         }
-    }
-
-    if candidate.finish_reason.is_some() {
-        let stop_reason = candidate
-            .finish_reason
-            .as_ref()
-            .map(|reason| match reason.as_str() {
-                "STOP" => StopReason::EndTurn,
-                "MAX_TOKENS" => StopReason::MaxTokens,
-                "STOP_SEQUENCE" => StopReason::StopSequence,
-                _ => StopReason::EndTurn,
-            })
-            .unwrap_or(StopReason::EndTurn);
-
-        return Some(CoreStreamEvent::MessageDelta {
-            delta: MessageDelta {
-                stop_reason: Some(stop_reason),
-                usage: response
-                    .usage_metadata
-                    .map(|u| Usage::new(u.prompt_token_count, u.candidates_token_count)),
-            },
-        });
     }
 
     None

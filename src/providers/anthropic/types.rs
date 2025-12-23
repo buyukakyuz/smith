@@ -76,9 +76,11 @@ pub struct ApiResponse {
     pub usage: ApiUsage,
 }
 
-#[derive(Debug, Deserialize)]
+#[derive(Debug, Deserialize, Default)]
 pub struct ApiUsage {
+    #[serde(default)]
     pub input_tokens: u32,
+    #[serde(default)]
     pub output_tokens: u32,
 }
 
@@ -115,7 +117,10 @@ pub struct SseDelta {
 }
 
 #[derive(Debug, Deserialize)]
-pub struct SseMessage {}
+pub struct SseMessage {
+    #[serde(default)]
+    pub usage: Option<ApiUsage>,
+}
 
 #[cfg(test)]
 mod tests {

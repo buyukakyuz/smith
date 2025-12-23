@@ -328,6 +328,7 @@ pub enum StreamEvent {
     },
     MessageStart {
         message: Message,
+        usage: Option<Usage>,
     },
     MessageDelta {
         delta: MessageDelta,

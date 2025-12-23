@@ -1,7 +1,7 @@
 use super::AugmentedLLM;
 use super::stream_accumulator::StreamAccumulator;
 use crate::core::error::{AgentError, Result};
-use crate::core::types::{CompletionRequest, Message, Role, StreamEvent};
+use crate::core::types::{CompletionRequest, Message, Role, StreamEvent, Usage};
 use crate::tools::ToolExecutor;
 use futures::StreamExt;
 
@@ -10,18 +10,22 @@ impl AugmentedLLM {
         &mut self,
         user_message: impl Into<String>,
         mut on_event: F,
-    ) -> Result<Message>
+    ) -> Result<(Message, Usage)>
     where
         F: FnMut(&StreamEvent),
     {
         self.memory.push(Message::user(user_message));
+        let mut total_usage = Usage::default();
 
         for _ in 0..self.config.max_iterations {
-            let assistant_message = self.process_single_turn(&mut on_event).await?;
+            let (assistant_message, turn_usage) = self.process_single_turn(&mut on_event).await?;
+            if let Some(usage) = turn_usage {
+                total_usage.add(&usage);
+            }
             self.memory.push(assistant_message.clone());
 
             if !assistant_message.has_tool_use() {
-                return Ok(assistant_message);
+                return Ok((assistant_message, total_usage));
             }
 
             self.execute_and_record_tools(&assistant_message).await;
@@ -32,13 +36,14 @@ impl AugmentedLLM {
         ))
     }
 
-    async fn process_single_turn<F>(&self, on_event: &mut F) -> Result<Message>
+    async fn process_single_turn<F>(&self, on_event: &mut F) -> Result<(Message, Option<Usage>)>
     where
         F: FnMut(&StreamEvent),
     {
         let request = self.build_completion_request();
         let mut stream = self.llm.stream(request).await?;
         let mut accumulator = StreamAccumulator::default();
+        let mut final_usage: Option<Usage> = None;
 
         while let Some(event_result) = stream.next().await {
             let event = event_result?;
@@ -54,14 +59,30 @@ impl AugmentedLLM {
                 StreamEvent::ContentBlockDelta { index, delta } => {
                     accumulator.handle_delta(index, delta);
                 }
+                StreamEvent::MessageStart { usage, .. } => {
+                    if let Some(u) = usage {
+                        final_usage = Some(final_usage.map_or(u, |mut existing| {
+                            existing.add(&u);
+                            existing
+                        }));
+                    }
+                }
+                StreamEvent::MessageDelta { delta } => {
+                    if let Some(u) = delta.usage {
+                        final_usage = Some(final_usage.map_or(u, |mut existing| {
+                            existing.add(&u);
+                            existing
+                        }));
+                    }
+                }
                 StreamEvent::MessageStop => break,
                 _ => {}
             }
         }
 
-        Ok(Message::new(
-            Role::Assistant,
-            accumulator.into_content_blocks(),
+        Ok((
+            Message::new(Role::Assistant, accumulator.into_content_blocks()),
+            final_usage,
         ))
     }
 

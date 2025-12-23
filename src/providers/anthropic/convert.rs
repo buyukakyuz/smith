@@ -163,12 +163,20 @@ pub fn parse_stream_event(data: &str) -> Option<StreamEvent> {
     let event: SseEventData = serde_json::from_str(data).ok()?;
 
     match event.event_type.as_str() {
-        "message_start" => event.message.map(|_| StreamEvent::MessageStart {
-            message: Message {
-                role: Role::Assistant,
-                content: vec![],
-            },
-        }),
+        "message_start" => {
+            let usage = event
+                .message
+                .as_ref()
+                .and_then(|m| m.usage.as_ref())
+                .map(from_api_usage);
+            Some(StreamEvent::MessageStart {
+                message: Message {
+                    role: Role::Assistant,
+                    content: vec![],
+                },
+                usage,
+            })
+        }
         "content_block_start" => {
             let index = event.index.unwrap_or(0);
             let block = event.content_block.map(from_api_content_block)?;
