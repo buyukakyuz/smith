@@ -5,6 +5,7 @@ use crate::core::error::Result;
 
 pub mod context;
 pub mod engine;
+pub mod error_hints;
 pub mod events;
 pub mod executor;
 pub mod fs;
