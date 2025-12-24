@@ -19,14 +19,19 @@ use tokio::sync::mpsc;
 pub async fn run_tui(agent_config: AgentConfig, show_model_picker: bool) -> Result<()> {
     let (event_tx, event_rx) = mpsc::unbounded_channel();
 
-    let config_event_tx = if let Some(persister) = ConfigPersister::with_default_path() {
-        let (handler, tx) = ConfigEventHandler::new(Arc::new(persister));
-        tokio::spawn(handler.run());
-        Some(tx)
-    } else {
-        tracing::warn!("Could not determine config path, model selection will not be persisted");
-        None
-    };
+    let config_event_tx = ConfigPersister::with_default_path().map_or_else(
+        || {
+            tracing::warn!(
+                "Could not determine config path, model selection will not be persisted"
+            );
+            None
+        },
+        |persister| {
+            let (handler, tx) = ConfigEventHandler::new(Arc::new(persister));
+            tokio::spawn(handler.run());
+            Some(tx)
+        },
+    );
 
     let mut app = TuiApp::with_lazy_agent(
         agent_config,

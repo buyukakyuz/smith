@@ -11,13 +11,13 @@ use crate::ui::theme::Theme;
 
 impl InputWidget<'_> {
     pub fn render(&mut self, area: Rect, frame: &mut Frame) {
-        self.render_separator(area, frame.buffer_mut());
+        Self::render_separator(area, frame.buffer_mut());
 
-        let input_area = self.input_area(area);
-        self.render_prefix(input_area, frame.buffer_mut());
+        let input_area = Self::input_area(area);
+        Self::render_prefix(input_area, frame.buffer_mut());
         self.render_hint_if_needed(input_area, frame.buffer_mut());
 
-        let textarea_area = self.textarea_area(input_area);
+        let textarea_area = Self::textarea_area(input_area);
         self.render_textarea(textarea_area, frame);
 
         if self.show_suggestions && !self.suggestions.is_empty() {
@@ -25,7 +25,7 @@ impl InputWidget<'_> {
         }
     }
 
-    fn render_separator(&self, area: Rect, buf: &mut Buffer) {
+    fn render_separator(area: Rect, buf: &mut Buffer) {
         let separator_area = Rect {
             x: area.x,
             y: area.y,
@@ -40,7 +40,7 @@ impl InputWidget<'_> {
         Paragraph::new(line).render(separator_area, buf);
     }
 
-    fn render_prefix(&self, input_area: Rect, buf: &mut Buffer) {
+    fn render_prefix(input_area: Rect, buf: &mut Buffer) {
         let prefix_area = Rect {
             x: input_area.x,
             y: input_area.y,
@@ -53,11 +53,11 @@ impl InputWidget<'_> {
     }
 
     fn render_hint_if_needed(&self, input_area: Rect, buf: &mut Buffer) {
+        const HINT_TEXT: &str = "↵ send";
+
         if self.is_empty() {
             return;
         }
-
-        const HINT_TEXT: &str = "↵ send";
         let hint_width = HINT_TEXT.len() as u16;
 
         let hint_area = Rect {
@@ -137,7 +137,7 @@ impl InputWidget<'_> {
             indicator,
         ])
     }
-    fn input_area(&self, area: Rect) -> Rect {
+    const fn input_area(area: Rect) -> Rect {
         Rect {
             x: area.x,
             y: area.y + 1,
@@ -146,7 +146,7 @@ impl InputWidget<'_> {
         }
     }
 
-    fn textarea_area(&self, input_area: Rect) -> Rect {
+    const fn textarea_area(input_area: Rect) -> Rect {
         const HINT_WIDTH: u16 = 8;
 
         Rect {
@@ -167,7 +167,7 @@ mod tests {
         let widget = InputWidget::new();
         let input_area = Rect::new(0, 0, 80, 3);
 
-        let textarea = widget.textarea_area(input_area);
+        let textarea = InputWidget::textarea_area(input_area);
 
         assert!(textarea.width < input_area.width);
         assert_eq!(textarea.x, 2);
