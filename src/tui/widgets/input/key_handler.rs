@@ -66,7 +66,7 @@ impl InputWidget<'_> {
         InputAction::Continue
     }
 
-    fn handle_backtab(&mut self) -> InputAction {
+    const fn handle_backtab(&mut self) -> InputAction {
         if self.show_suggestions && !self.suggestions.is_empty() {
             self.select_previous_suggestion();
         }

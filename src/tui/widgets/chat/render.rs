@@ -13,12 +13,13 @@ use crate::ui::tool_card::ToolCard;
 const MAX_MESSAGE_LINES: usize = 50;
 
 impl ChatMessage {
+    #[must_use]
     pub fn render_to_lines(&self, width: u16, spinner_frame: usize) -> Vec<Line<'static>> {
         match self {
             Self::User(text) => render_user(text, width),
             Self::Assistant(text) => render_assistant(text, width, false),
             Self::StreamingAssistant(text) => render_assistant(text, width, true),
-            Self::System { text, level } => render_system(text, level),
+            Self::System { text, level } => render_system(text, *level),
             Self::ToolExecution {
                 tool_type,
                 input,
@@ -30,7 +31,7 @@ impl ChatMessage {
                 input,
                 output.as_ref(),
                 *elapsed,
-                state,
+                *state,
                 width,
                 spinner_frame,
             ),
@@ -81,7 +82,7 @@ fn render_assistant(text: &str, width: u16, streaming: bool) -> Vec<Line<'static
     lines
 }
 
-fn render_system(text: &str, level: &MessageLevel) -> Vec<Line<'static>> {
+fn render_system(text: &str, level: MessageLevel) -> Vec<Line<'static>> {
     let icon = level.icon();
     let style = level.style();
 
@@ -96,7 +97,7 @@ fn render_tool(
     input: &str,
     output: Option<&String>,
     elapsed: Option<Duration>,
-    state: &ToolState,
+    state: ToolState,
     width: u16,
     spinner_frame: usize,
 ) -> Vec<Line<'static>> {
@@ -105,7 +106,7 @@ fn render_tool(
         .unwrap_or_default();
 
     let mut card = ToolCard::new(tool_type.clone(), input)
-        .state(state.clone())
+        .state(state)
         .output(output_lines)
         .frame_index(spinner_frame);
 
@@ -156,7 +157,7 @@ fn is_simple_text(text: &str) -> bool {
 }
 
 fn is_content_lost(original: &str, rendered: &[Line<'_>]) -> bool {
-    let has_alphanumeric = original.chars().any(|c| c.is_alphanumeric());
+    let has_alphanumeric = original.chars().any(char::is_alphanumeric);
 
     if !has_alphanumeric {
         return false;
@@ -165,7 +166,7 @@ fn is_content_lost(original: &str, rendered: &[Line<'_>]) -> bool {
     let rendered_has_content = rendered
         .iter()
         .flat_map(|line| line.spans.iter())
-        .any(|span| span.content.chars().any(|c| c.is_alphanumeric()));
+        .any(|span| span.content.chars().any(char::is_alphanumeric));
 
     !rendered_has_content
 }

@@ -1,3 +1,4 @@
+#![allow(clippy::cast_possible_truncation)]
 mod message;
 mod render;
 mod scroll_state;
@@ -41,7 +42,7 @@ impl<'a> ChatWidget<'a> {
         let content_width = area.width.saturating_sub(4);
         let all_lines = self.collect_all_lines(content_width);
 
-        self.update_scroll_and_render(area, buf, all_lines, content_width);
+        self.update_scroll_and_render(area, buf, &all_lines, content_width);
     }
 
     fn collect_all_lines(&self, width: u16) -> Vec<Line<'static>> {
@@ -62,7 +63,7 @@ impl<'a> ChatWidget<'a> {
         self,
         area: Rect,
         buf: &mut Buffer,
-        lines: Vec<Line<'static>>,
+        lines: &[Line<'static>],
         content_width: u16,
     ) {
         let total_lines = lines.len();
