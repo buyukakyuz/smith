@@ -46,7 +46,7 @@ struct LineContext<'a> {
 }
 
 impl<'a> LineContext<'a> {
-    fn new(card: &'a ToolCard, width: u16) -> Self {
+    const fn new(card: &'a ToolCard, width: u16) -> Self {
         let width = width as usize;
         Self {
             card,
