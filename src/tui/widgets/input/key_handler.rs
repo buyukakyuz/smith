@@ -136,11 +136,11 @@ impl InputWidget<'_> {
         self.selected_suggestion = 0;
     }
 
-    fn select_next_suggestion(&mut self) {
+    const fn select_next_suggestion(&mut self) {
         self.selected_suggestion = (self.selected_suggestion + 1) % self.suggestions.len();
     }
 
-    fn select_previous_suggestion(&mut self) {
+    const fn select_previous_suggestion(&mut self) {
         if self.selected_suggestion > 0 {
             self.selected_suggestion -= 1;
         } else {
