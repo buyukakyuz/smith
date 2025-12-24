@@ -1,3 +1,4 @@
+#![allow(clippy::cast_possible_truncation)]
 mod line_builder;
 mod parser;
 mod types;
