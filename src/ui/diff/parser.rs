@@ -82,9 +82,9 @@ pub fn extract_hunks(lines: &[DiffLine]) -> Vec<Hunk<'_>> {
                 |last| idx.saturating_sub(CONTEXT_LINES).max(last + 1),
             );
 
-            for i in start..idx {
-                if !current_hunk.contains(&&lines[i]) {
-                    current_hunk.push(&lines[i]);
+            for line in lines.iter().take(idx).skip(start) {
+                if !current_hunk.contains(&line) {
+                    current_hunk.push(line);
                 }
             }
 

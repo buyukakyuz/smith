@@ -89,7 +89,7 @@ impl<'a> LineBuilder<'a> {
 
         for (idx, hunk) in hunks.iter().enumerate() {
             if idx > 0 {
-                output.push(self.build_separator(content_width));
+                output.push(Self::build_separator(content_width));
             }
             output.extend(self.build_hunk_lines(hunk, content_width));
         }
@@ -97,7 +97,7 @@ impl<'a> LineBuilder<'a> {
         output
     }
 
-    fn build_separator(&self, width: usize) -> Line<'static> {
+    fn build_separator(width: usize) -> Line<'static> {
         Line::from(Span::styled(
             format!(
                 "  {}",
@@ -115,7 +115,7 @@ impl<'a> LineBuilder<'a> {
             let wrapped = wrap(content, content_width);
 
             for (i, wrapped_line) in wrapped.iter().enumerate().take(3) {
-                output.push(self.build_diff_line(line, &wrapped_line, i == 0));
+                output.push(self.build_diff_line(line, wrapped_line, i == 0));
             }
         }
 
@@ -147,7 +147,7 @@ impl<'a> LineBuilder<'a> {
         Line::from(spans)
     }
 
-    fn content_width(&self, total_width: usize) -> usize {
+    const fn content_width(&self, total_width: usize) -> usize {
         let padding = if self.show_line_numbers { 10 } else { 4 };
         total_width.saturating_sub(padding)
     }
