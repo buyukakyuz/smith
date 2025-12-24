@@ -21,19 +21,17 @@ impl Selection {
         }
     }
 
-    pub fn prev(self) -> Self {
+    pub const fn prev(self) -> Self {
         match self {
-            Self::AllowOnce => Self::AllowOnce,
-            Self::AllowSession => Self::AllowOnce,
+            Self::AllowOnce | Self::AllowSession => Self::AllowOnce,
             Self::Feedback => Self::AllowSession,
         }
     }
 
-    pub fn next(self) -> Self {
+    pub const fn next(self) -> Self {
         match self {
             Self::AllowOnce => Self::AllowSession,
-            Self::AllowSession => Self::Feedback,
-            Self::Feedback => Self::Feedback,
+            Self::AllowSession | Self::Feedback => Self::Feedback,
         }
     }
 
@@ -71,7 +69,7 @@ pub fn handle_key(key: KeyEvent, current: Selection) -> KeyAction {
     }
 }
 
-pub fn get_action_verb(op: PermissionType) -> &'static str {
+pub const fn get_action_verb(op: PermissionType) -> &'static str {
     match op {
         PermissionType::FileWrite => "create",
         PermissionType::FileRead => "read",
