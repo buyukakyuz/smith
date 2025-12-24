@@ -18,7 +18,7 @@ pub struct PromptRenderer<'a> {
 }
 
 impl<'a> PromptRenderer<'a> {
-    pub fn new(
+    pub const fn new(
         request: &'a PermissionRequest,
         selected: Selection,
         content_preview: Option<&'a str>,
@@ -49,9 +49,9 @@ impl<'a> PromptRenderer<'a> {
             ])
             .split(dialog_area);
 
-        self.draw_horizontal_border(frame, main_chunks[0]);
+        Self::draw_horizontal_border(frame, main_chunks[0]);
         self.draw_content(frame, main_chunks[1]);
-        self.draw_horizontal_border(frame, main_chunks[2]);
+        Self::draw_horizontal_border(frame, main_chunks[2]);
     }
 
     fn draw_content(&self, frame: &mut Frame, area: Rect) {
@@ -78,15 +78,25 @@ impl<'a> PromptRenderer<'a> {
 
         let mut chunk_iter = chunks.iter();
 
-        self.draw_action_header(frame, *chunk_iter.next().unwrap());
-
-        if let Some(preview) = self.content_preview {
-            self.draw_divider(frame, *chunk_iter.next().unwrap());
-            self.draw_preview(frame, *chunk_iter.next().unwrap(), preview);
+        if let Some(&header_area) = chunk_iter.next() {
+            self.draw_action_header(frame, header_area);
         }
 
-        self.draw_divider(frame, *chunk_iter.next().unwrap());
-        self.draw_options(frame, *chunk_iter.next().unwrap());
+        if let Some(preview) = self.content_preview {
+            if let Some(&divider_area) = chunk_iter.next() {
+                Self::draw_divider(frame, divider_area);
+            }
+            if let Some(&preview_area) = chunk_iter.next() {
+                Self::draw_preview(frame, preview_area, preview);
+            }
+        }
+
+        if let Some(&divider_area) = chunk_iter.next() {
+            Self::draw_divider(frame, divider_area);
+        }
+        if let Some(&options_area) = chunk_iter.next() {
+            self.draw_options(frame, options_area);
+        }
     }
 
     fn calculate_dialog_width(&self, terminal_width: u16) -> u16 {
@@ -97,20 +107,16 @@ impl<'a> PromptRenderer<'a> {
             .request
             .context
             .as_ref()
-            .map(|c| to_u16(c.len()) + 10)
-            .unwrap_or(0);
-        let preview_width = self
-            .content_preview
-            .map(|content| {
-                let max_line = content
-                    .lines()
-                    .take(MAX_PREVIEW_LINES)
-                    .map(str::len)
-                    .max()
-                    .unwrap_or(0);
-                to_u16(max_line) + 10
-            })
-            .unwrap_or(0);
+            .map_or(0, |c| to_u16(c.len()) + 10);
+        let preview_width = self.content_preview.map_or(0, |content| {
+            let max_line = content
+                .lines()
+                .take(MAX_PREVIEW_LINES)
+                .map(str::len)
+                .max()
+                .unwrap_or(0);
+            to_u16(max_line) + 10
+        });
 
         [
             MIN_DIALOG_WIDTH,
@@ -121,17 +127,17 @@ impl<'a> PromptRenderer<'a> {
         ]
         .into_iter()
         .max()
-        .unwrap()
+        .unwrap_or(MIN_DIALOG_WIDTH)
         .clamp(MIN_DIALOG_WIDTH, MAX_DIALOG_WIDTH)
         .min(terminal_width.saturating_sub(4))
     }
 
-    fn draw_horizontal_border(&self, frame: &mut Frame, area: Rect) {
+    fn draw_horizontal_border(frame: &mut Frame, area: Rect) {
         let border = BoxChars::HORIZONTAL.repeat(area.width as usize);
         frame.render_widget(Paragraph::new(border).fg(BrandColors::DARK_GRAY), area);
     }
 
-    fn draw_divider(&self, frame: &mut Frame, area: Rect) {
+    fn draw_divider(frame: &mut Frame, area: Rect) {
         let divider = BoxChars::DIVIDER_LIGHT.repeat(area.width as usize);
         frame.render_widget(Paragraph::new(divider).fg(BrandColors::DARK_GRAY), area);
     }
@@ -159,7 +165,7 @@ impl<'a> PromptRenderer<'a> {
         frame.render_widget(Paragraph::new(lines), area);
     }
 
-    fn action_display(&self) -> (&'static str, ratatui::style::Color) {
+    const fn action_display(&self) -> (&'static str, ratatui::style::Color) {
         match self.request.operation_type {
             PermissionType::FileWrite => {
                 let text = if self.content_preview.is_some() {
@@ -177,7 +183,7 @@ impl<'a> PromptRenderer<'a> {
         }
     }
 
-    fn draw_preview(&self, frame: &mut Frame, area: Rect, content: &str) {
+    fn draw_preview(frame: &mut Frame, area: Rect, content: &str) {
         let lines: Vec<Line> = content
             .lines()
             .take(MAX_PREVIEW_LINES)
