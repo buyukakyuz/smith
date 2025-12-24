@@ -15,7 +15,7 @@ pub struct PermissionPrompt {
 
 impl PermissionPrompt {
     #[must_use]
-    pub fn new(request: PermissionRequest) -> Self {
+    pub const fn new(request: PermissionRequest) -> Self {
         Self {
             request,
             selected: Selection::AllowOnce,
