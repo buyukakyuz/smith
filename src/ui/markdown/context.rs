@@ -7,7 +7,7 @@ pub struct RenderContext {
 impl RenderContext {
     const INDENT_STR: &'static str = "  ";
 
-    pub fn new(indent_level: usize, width: Option<usize>) -> Self {
+    pub const fn new(indent_level: usize, width: Option<usize>) -> Self {
         Self {
             indent_level,
             width,
@@ -18,7 +18,7 @@ impl RenderContext {
         Self::INDENT_STR.repeat(self.indent_level)
     }
 
-    pub fn indent_width(&self) -> usize {
+    pub const fn indent_width(&self) -> usize {
         self.indent_level * Self::INDENT_STR.len()
     }
 
@@ -26,7 +26,7 @@ impl RenderContext {
         self.width.unwrap_or(80).saturating_sub(self.indent_width())
     }
 
-    pub fn nested(&self) -> Self {
+    pub const fn nested(&self) -> Self {
         Self {
             indent_level: self.indent_level + 1,
             ..*self
