@@ -6,10 +6,9 @@ mod render;
 mod terminal;
 
 use crate::config::{ConfigEvent, ConfigEventSender};
-use crate::core::augmented_llm::AugmentedLLM;
 use crate::core::error::Result;
 use crate::tools::ToolType;
-use crate::tui::agent_runner::{AgentCommand, AgentRunner};
+use crate::tui::agent_runner::{AgentCommand, AgentConfig, AgentRunner};
 use crate::tui::events::{AppEvent, terminal_event_loop, tick_loop};
 use crate::tui::layout::calculate_layout;
 use crate::tui::state::AppState;
@@ -43,8 +42,8 @@ pub struct TuiApp {
 }
 
 impl TuiApp {
-    pub(crate) fn with_event_channels(
-        agent: AugmentedLLM,
+    pub(crate) fn with_lazy_agent(
+        agent_config: AgentConfig,
         event_tx: mpsc::UnboundedSender<AppEvent>,
         event_rx: mpsc::UnboundedReceiver<AppEvent>,
         config_event_tx: Option<ConfigEventSender>,
@@ -52,10 +51,13 @@ impl TuiApp {
     ) -> Result<Self> {
         let terminal = setup_terminal()?;
 
-        let provider_name = agent.llm().name().to_string();
-        let model_name = agent.llm().model().to_string();
+        let (provider_name, model_name) = if let Some(id) = &agent_config.model_id {
+            ("".to_string(), id.clone())
+        } else {
+            ("".to_string(), "(select model)".to_string())
+        };
 
-        let (runner, agent_cmd_tx) = AgentRunner::new(agent, event_tx.clone());
+        let (runner, agent_cmd_tx) = AgentRunner::new(agent_config, event_tx.clone());
         tokio::spawn(async move {
             runner.run().await;
         });

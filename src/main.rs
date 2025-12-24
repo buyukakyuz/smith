@@ -1,7 +1,7 @@
 use smith::cli::{Cli, Commands, ConfigSubcommands};
 use smith::config::AppConfig;
 use smith::core::Result;
-use smith::tui;
+use smith::tui::{self, AgentConfig};
 
 use clap::Parser;
 
@@ -37,8 +37,15 @@ fn handle_command(command: Commands) -> Result<()> {
 
 async fn run_interactive(cli: &Cli, config: &AppConfig) -> Result<()> {
     let model_specified = cli.model.is_some() || config.model.is_some();
-    let llm = smith::cli::create_provider(cli, config)?;
-    let agent = smith::cli::create_agent(&llm, cli, config)?;
 
-    tui::run_tui(agent, !model_specified).await
+    let model_id = cli.model.clone().or_else(|| config.model.clone());
+
+    let agent_config = AgentConfig {
+        model_id,
+        max_iterations: Some(cli.max_iterations),
+        system_prompt: cli.system.clone(),
+        custom_system_prompt: config.custom_system_prompt.clone(),
+    };
+
+    tui::run_tui(agent_config, !model_specified).await
 }

@@ -95,8 +95,7 @@ pub fn extract_hunks(lines: &[DiffLine]) -> Vec<Hunk<'_>> {
 
             if distance <= CONTEXT_LINES {
                 current_hunk.push(line);
-            } else if distance == CONTEXT_LINES + 1 {
-                current_hunk.push(line);
+            } else {
                 hunks.push(current_hunk);
                 current_hunk = Vec::new();
                 last_change_idx = None;

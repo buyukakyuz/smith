@@ -1,13 +1,14 @@
-use crate::config::ModelRegistry;
+use crate::config::{ModelRegistry, ProviderType};
 
 #[derive(Debug, Clone)]
 pub struct PickerModel {
     pub id: String,
     pub name: String,
+    pub provider: ProviderType,
 }
 
 pub struct ModelPickerModal {
-    pub models: Vec<(String, Vec<PickerModel>)>,
+    pub models: Vec<(ProviderType, Vec<PickerModel>)>,
     pub selected: usize,
     total_count: usize,
 }
@@ -18,7 +19,7 @@ impl ModelPickerModal {
         let registry = ModelRegistry::load();
 
         let models: Vec<_> = registry
-            .all_models_by_provider()
+            .models_by_provider()
             .into_iter()
             .map(|(provider, models)| {
                 let picker_models: Vec<PickerModel> = models
@@ -26,9 +27,10 @@ impl ModelPickerModal {
                     .map(|m| PickerModel {
                         id: m.id.clone(),
                         name: m.name.clone(),
+                        provider: m.provider.clone(),
                     })
                     .collect();
-                (provider.to_string(), picker_models)
+                (provider.clone(), picker_models)
             })
             .collect();
 
@@ -70,6 +72,11 @@ impl ModelPickerModal {
         if self.selected + 1 < self.total_count {
             self.selected += 1;
         }
+    }
+
+    #[must_use]
+    pub fn provider_display_name(provider: &ProviderType) -> &'static str {
+        provider.display_name()
     }
 }
 

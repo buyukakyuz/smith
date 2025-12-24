@@ -190,7 +190,10 @@ pub fn render_permission_modal(
 pub fn render_model_picker_modal(
     frame: &mut Frame,
     area: Rect,
-    models: &[(String, Vec<crate::tui::state::PickerModel>)],
+    models: &[(
+        crate::config::ProviderType,
+        Vec<crate::tui::state::PickerModel>,
+    )],
     selected: usize,
     total_count: usize,
 ) {
@@ -226,7 +229,10 @@ pub fn render_model_picker_modal(
     let mut flat_idx = 0;
 
     for (provider, provider_models) in models {
-        let provider_line = Line::from(Span::styled(format!("  {provider}"), Theme::secondary()));
+        let provider_line = Line::from(Span::styled(
+            format!("  {}", provider.display_name()),
+            Theme::secondary(),
+        ));
         frame.render_widget(
             Paragraph::new(provider_line),
             Rect {

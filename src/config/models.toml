@@ -1,53 +1,70 @@
-[[anthropic]]
+[[models]]
+id = "minimax/minimax-m2.1"
+name = "MiniMax M2.1"
+provider = "openrouter"
+max_tokens = 65000
+default = false
+supports_tools = false
+
+[[models]]
 id = "claude-opus-4-5"
 name = "Claude Opus 4.5"
+provider = "anthropic"
 max_tokens = 64000
 default = false
 
-[[anthropic]]
+[[models]]
 id = "claude-sonnet-4-5"
 name = "Claude Sonnet 4.5"
+provider = "anthropic"
 max_tokens = 64000
 default = true
 
-[[anthropic]]
+[[models]]
 id = "claude-haiku-4-5"
 name = "Claude Haiku 4.5"
+provider = "anthropic"
 max_tokens = 64000
 default = false
 
-[[openai]]
+[[models]]
 id = "gpt-5.2-pro"
 name = "GPT-5.2 pro"
+provider = "openai"
 max_tokens = 128000
 default = false
 
-[[openai]]
+[[models]]
 id = "gpt-5.2"
 name = "GPT-5.2"
+provider = "openai"
 max_tokens = 128000
 default = false
 
-[[openai]]
+[[models]]
 id = "gpt-5-mini"
 name = "GPT-5 Mini"
+provider = "openai"
 max_tokens = 64000
 default = false
 
-[[openai]]
+[[models]]
 id = "gpt-5-nano"
 name = "GPT-5 Nano"
+provider = "openai"
 max_tokens = 64000
 default = false
 
-[[gemini]]
+[[models]]
 id = "gemini-3-pro-preview"
 name = "Gemini-3 Pro"
+provider = "gemini"
 max_tokens = 65536
 default = false
 
-[[gemini]]
+[[models]]
 id = "gemini-3-flash-preview"
 name = "Gemini-3 Flash"
+provider = "gemini"
 max_tokens = 65536
 default = false

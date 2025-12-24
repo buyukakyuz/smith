@@ -4,4 +4,4 @@ mod provider;
 
 pub use agent::create_agent;
 pub use args::{Cli, Commands, ConfigSubcommands};
-pub use provider::create_provider;
+pub use provider::create_provider_for_cli;

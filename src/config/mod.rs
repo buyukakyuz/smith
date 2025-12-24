@@ -8,7 +8,7 @@ use std::path::PathBuf;
 use std::{fs, io};
 
 pub use event_handler::{ConfigEvent, ConfigEventHandler, ConfigEventSender};
-pub use models::ModelRegistry;
+pub use models::{ModelInfo, ModelRegistry, ProviderType};
 pub use persistence::{ConfigError, ConfigPatch, ConfigPersister, ConfigResult};
 
 pub fn get_config_dir() -> Option<PathBuf> {
