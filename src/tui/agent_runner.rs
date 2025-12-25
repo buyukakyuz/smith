@@ -181,10 +181,6 @@ impl AgentRunner {
             }
         }
 
-        if let Err(e) = agent.enable_permissions() {
-            tracing::warn!("Failed to enable permissions: {e}");
-        }
-
         let provider = llm.name().to_string();
         let model = llm.model().to_string();
         let _ = self

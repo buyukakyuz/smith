@@ -43,14 +43,14 @@ impl ProviderType {
     pub const fn default_base_url(&self) -> Option<&'static str> {
         match self {
             Self::Anthropic => Some("https://api.anthropic.com"),
-            Self::OpenAI => Some("https://api.openai.com/v1"),
-            Self::Gemini => Some("https://generativelanguage.googleapis.com/v1beta"),
-            Self::OpenRouter => Some("https://openrouter.ai/api/v1"),
-            Self::Together => Some("https://api.together.xyz/v1"),
-            Self::Groq => Some("https://api.groq.com/openai/v1"),
-            Self::Fireworks => Some("https://api.fireworks.ai/inference/v1"),
-            Self::Ollama => Some("http://localhost:11434/v1"),
-            Self::Vllm => Some("http://localhost:8000/v1"),
+            Self::OpenAI => Some("https://api.openai.com"),
+            Self::Gemini => Some("https://generativelanguage.googleapis.com"),
+            Self::OpenRouter => Some("https://openrouter.ai/api"),
+            Self::Together => Some("https://api.together.xyz"),
+            Self::Groq => Some("https://api.groq.com/openai"),
+            Self::Fireworks => Some("https://api.fireworks.ai/inference"),
+            Self::Ollama => Some("http://localhost:11434"),
+            Self::Vllm => Some("http://localhost:8000"),
             Self::Azure => None,
             Self::Custom => None,
         }
