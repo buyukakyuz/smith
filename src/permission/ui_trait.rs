@@ -5,17 +5,6 @@ pub trait PermissionUI: Send + Sync {
     fn prompt_user(&self, request: &PermissionRequest) -> Result<PermissionResponse>;
 }
 
-#[derive(Debug, Clone, Copy, Default)]
-pub struct RatatuiPermissionUI;
-
-impl PermissionUI for RatatuiPermissionUI {
-    fn prompt_user(&self, request: &PermissionRequest) -> Result<PermissionResponse> {
-        crate::ui::permission::prompt_user(request).map_err(|e| {
-            crate::core::error::AgentError::InvalidState(format!("Permission prompt failed: {e}"))
-        })
-    }
-}
-
 #[cfg(test)]
 pub mod test_utils {
     use super::*;

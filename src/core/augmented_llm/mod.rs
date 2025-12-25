@@ -44,11 +44,6 @@ impl AugmentedLLM {
         self.permission_manager = Some(manager);
     }
 
-    pub fn enable_permissions(&mut self) -> Result<()> {
-        self.permission_manager = Some(Arc::new(PermissionManager::new()?));
-        Ok(())
-    }
-
     pub fn register_tool_event_handler(&mut self, handler: Arc<dyn ToolEventHandler>) {
         self.tool_engine.register_handler(handler);
     }

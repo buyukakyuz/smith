@@ -170,11 +170,10 @@ impl AgentRunner {
         agent
             .register_tool_event_handler(Arc::new(TuiToolEventHandler::new(self.event_tx.clone())));
 
-        match PermissionManager::new() {
+        let permission_ui = Arc::new(TuiPermissionUI::new(self.event_tx.clone()));
+        match PermissionManager::new(permission_ui) {
             Ok(pm) => {
-                let permission_ui = Arc::new(TuiPermissionUI::new(self.event_tx.clone()));
-                let permission_manager = pm.with_ui(permission_ui);
-                agent.set_permission_manager(Arc::new(permission_manager));
+                agent.set_permission_manager(Arc::new(pm));
             }
             Err(e) => {
                 tracing::warn!("Failed to create permission manager: {e}");

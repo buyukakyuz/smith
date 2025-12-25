@@ -20,7 +20,6 @@ pub fn create_agent(llm: &Arc<dyn LLM>, cli: &Cli, config: &AppConfig) -> Result
     agent.set_system_prompt(&system_prompt);
 
     register_tools(&mut agent);
-    enable_permissions(&mut agent);
 
     Ok(agent)
 }
@@ -77,12 +76,5 @@ fn register_tools(agent: &mut AugmentedLLM) {
 
     for tool in tools {
         agent.tools_mut().register(tool);
-    }
-}
-
-fn enable_permissions(agent: &mut AugmentedLLM) {
-    if let Err(e) = agent.enable_permissions() {
-        eprintln!("Warning: Failed to enable permissions: {e}");
-        eprintln!("Continuing without permission system.");
     }
 }

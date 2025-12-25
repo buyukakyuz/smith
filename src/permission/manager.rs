@@ -6,9 +6,9 @@ use std::sync::Arc;
 use super::config::PermissionConfig;
 use super::security::SecurityValidator;
 use super::types::{PermissionCheckResult, PermissionRequest, PermissionResponse, PermissionType};
+use super::ui_trait::PermissionUI;
 #[cfg(test)]
 use super::ui_trait::test_utils::HeadlessPermissionUI;
-use super::ui_trait::{PermissionUI, RatatuiPermissionUI};
 use crate::core::error::Result;
 
 #[derive(Debug, Default)]
@@ -37,12 +37,12 @@ pub struct PermissionManager {
 }
 
 impl PermissionManager {
-    pub fn new() -> Result<Self> {
+    pub fn new(ui: Arc<dyn PermissionUI>) -> Result<Self> {
         let config_path = PermissionConfig::default_permissions_file();
-        Self::with_config_path(config_path)
+        Self::with_config_path(config_path, ui)
     }
 
-    pub fn with_config_path(config_path: PathBuf) -> Result<Self> {
+    pub fn with_config_path(config_path: PathBuf, ui: Arc<dyn PermissionUI>) -> Result<Self> {
         let config = if config_path.exists() {
             PermissionConfig::load(&config_path)?
         } else {
@@ -55,14 +55,8 @@ impl PermissionManager {
             config: Arc::new(RwLock::new(config)),
             session: Arc::new(RwLock::new(SessionPermissions::default())),
             validator,
-            ui: Arc::new(RatatuiPermissionUI),
+            ui,
         })
-    }
-
-    #[must_use]
-    pub fn with_ui(mut self, ui: Arc<dyn PermissionUI>) -> Self {
-        self.ui = ui;
-        self
     }
 
     pub fn check_permission(&self, request: &PermissionRequest) -> Result<PermissionCheckResult> {
@@ -124,9 +118,11 @@ mod tests {
     fn create_test_manager() -> (PermissionManager, TempDir) {
         let temp_dir = TempDir::new().unwrap();
         let config_path = temp_dir.path().join("permissions.json");
-        let manager = PermissionManager::with_config_path(config_path)
-            .unwrap()
-            .with_ui(Arc::new(HeadlessPermissionUI::deny()));
+        let manager = PermissionManager::with_config_path(
+            config_path,
+            Arc::new(HeadlessPermissionUI::deny()),
+        )
+        .unwrap();
         (manager, temp_dir)
     }
 
