@@ -30,7 +30,7 @@ impl ModelPickerModal {
                         provider: m.provider.clone(),
                     })
                     .collect();
-                (provider.clone(), picker_models)
+                (provider, picker_models)
             })
             .collect();
 
@@ -60,22 +60,22 @@ impl ModelPickerModal {
     }
 
     #[must_use]
-    pub fn total_count(&self) -> usize {
+    pub const fn total_count(&self) -> usize {
         self.total_count
     }
 
-    pub fn select_prev(&mut self) {
+    pub const fn select_prev(&mut self) {
         self.selected = self.selected.saturating_sub(1);
     }
 
-    pub fn select_next(&mut self) {
+    pub const fn select_next(&mut self) {
         if self.selected + 1 < self.total_count {
             self.selected += 1;
         }
     }
 
     #[must_use]
-    pub fn provider_display_name(provider: &ProviderType) -> &'static str {
+    pub const fn provider_display_name(provider: &ProviderType) -> &'static str {
         provider.display_name()
     }
 }

@@ -158,13 +158,13 @@ impl OpenAICompatProvider {
     fn parse_error(&self, status: reqwest::StatusCode, body: &str) -> ProviderError {
         if let Ok(api_error) = serde_json::from_str::<types::ApiError>(body) {
             let message = api_error.error.message;
-            let hint = if !self.config.api_key_env_var.is_empty() {
+            let hint = if self.config.api_key_env_var.is_empty() {
+                None
+            } else {
                 Some(format!(
                     "Check your {} environment variable",
                     self.config.api_key_env_var
                 ))
-            } else {
-                None
             };
 
             return match status.as_u16() {

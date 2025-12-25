@@ -17,7 +17,7 @@ impl AppState {
     }
 
     #[must_use]
-    pub fn is_streaming(&self) -> bool {
+    pub const fn is_streaming(&self) -> bool {
         self.streaming_response.is_some()
     }
 }

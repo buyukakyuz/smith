@@ -52,9 +52,9 @@ impl TuiApp {
         let terminal = setup_terminal()?;
 
         let (provider_name, model_name) = if let Some(id) = &agent_config.model_id {
-            ("".to_string(), id.clone())
+            (String::new(), id.clone())
         } else {
-            ("".to_string(), "(select model)".to_string())
+            (String::new(), "(select model)".to_string())
         };
 
         let (runner, agent_cmd_tx) = AgentRunner::new(agent_config, event_tx.clone());
@@ -202,14 +202,13 @@ impl TuiApp {
             AppEvent::ToolCompleted { name, result } => {
                 if (name == ToolType::WriteFile.name() || name == ToolType::UpdateFile.name())
                     && let Some(output) = result.output()
+                    && let Some(metadata) = DiffMetadata::extract(output)
                 {
-                    if let Some(metadata) = DiffMetadata::extract(output) {
-                        let _ = self.event_tx.send(AppEvent::FileDiff {
-                            path: metadata.path,
-                            old_content: metadata.old_content,
-                            new_content: metadata.new_content,
-                        });
-                    }
+                    let _ = self.event_tx.send(AppEvent::FileDiff {
+                        path: metadata.path,
+                        old_content: metadata.old_content,
+                        new_content: metadata.new_content,
+                    });
                 }
                 self.state.complete_tool(&name, result);
             }
@@ -356,7 +355,7 @@ impl TuiApp {
                 self.state.permission_set_selection(1);
                 self.state.permission_confirm();
             }
-            KeyCode::Char('3') | KeyCode::Char('n') => {
+            KeyCode::Char('3' | 'n') => {
                 self.state.permission_set_selection(2);
             }
             KeyCode::Enter => {

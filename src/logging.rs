@@ -56,15 +56,17 @@ mod inner {
 
 #[cfg(not(feature = "debug-log"))]
 mod inner {
-    use super::*;
+    use super::PathBuf;
 
     #[inline(always)]
-    pub fn init() -> Option<(PathBuf, ())> {
+    #[must_use]
+    pub const fn init() -> Option<(PathBuf, ())> {
         None
     }
 
     #[inline(always)]
-    pub fn log_file_path() -> Option<&'static PathBuf> {
+    #[must_use]
+    pub const fn log_file_path() -> Option<&'static PathBuf> {
         None
     }
 }

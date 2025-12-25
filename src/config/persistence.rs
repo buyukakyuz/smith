@@ -39,7 +39,7 @@ impl ConfigPatch {
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.provider.is_none() && self.model.is_none()
     }
 }
@@ -51,7 +51,7 @@ pub struct ConfigPersister {
 
 impl ConfigPersister {
     #[must_use]
-    pub fn new(config_path: PathBuf) -> Self {
+    pub const fn new(config_path: PathBuf) -> Self {
         Self {
             config_path,
             write_lock: Mutex::new(()),

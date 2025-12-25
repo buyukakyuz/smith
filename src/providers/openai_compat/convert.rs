@@ -39,14 +39,14 @@ pub fn to_api_request(
         None
     };
 
-    let stop = if !request.stop_sequences.is_empty() {
-        Some(request.stop_sequences.clone())
-    } else {
+    let stop = if request.stop_sequences.is_empty() {
         None
+    } else {
+        Some(request.stop_sequences.clone())
     };
 
     ChatCompletionRequest {
-        model: config.resolve_model(&ModelId::default().as_str()),
+        model: config.resolve_model(ModelId::default().as_str()),
         messages,
         temperature: Some(request.temperature),
         max_tokens: Some(request.max_tokens),
@@ -89,7 +89,7 @@ fn to_user_message(message: &Message) -> ChatMessage {
                 ContentBlock::Image { source } => {
                     let url = match source {
                         ImageSource::Base64 { media_type, data } => {
-                            format!("data:{};base64,{}", media_type, data)
+                            format!("data:{media_type};base64,{data}")
                         }
                         ImageSource::Url { url } => url.clone(),
                     };
@@ -237,10 +237,10 @@ pub fn from_api_response(response: ChatCompletionResponse) -> CompletionResponse
 
     let mut content: Vec<ContentBlock> = Vec::new();
 
-    if let Some(text) = &choice.message.content {
-        if !text.is_empty() {
-            content.push(ContentBlock::Text { text: text.clone() });
-        }
+    if let Some(text) = &choice.message.content
+        && !text.is_empty()
+    {
+        content.push(ContentBlock::Text { text: text.clone() });
     }
 
     if let Some(tool_calls) = &choice.message.tool_calls {
@@ -265,8 +265,8 @@ pub fn from_api_response(response: ChatCompletionResponse) -> CompletionResponse
     let stop_reason = match choice.finish_reason.as_deref() {
         Some("stop") => StopReason::EndTurn,
         Some("length") => StopReason::MaxTokens,
-        Some("tool_calls") | Some("function_call") => StopReason::ToolUse,
-        Some("stop_sequence") | Some("content_filter") => StopReason::StopSequence,
+        Some("tool_calls" | "function_call") => StopReason::ToolUse,
+        Some("stop_sequence" | "content_filter") => StopReason::StopSequence,
         _ => StopReason::EndTurn,
     };
 
@@ -292,6 +292,7 @@ struct PartialToolCall {
 }
 
 impl StreamState {
+    #[must_use]
     pub fn new() -> Self {
         Self::default()
     }

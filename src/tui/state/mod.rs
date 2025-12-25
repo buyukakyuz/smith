@@ -120,13 +120,13 @@ impl AppState {
         self.model_picker_modal = None;
     }
 
-    pub fn model_picker_select_prev(&mut self) {
+    pub const fn model_picker_select_prev(&mut self) {
         if let Some(modal) = &mut self.model_picker_modal {
             modal.select_prev();
         }
     }
 
-    pub fn model_picker_select_next(&mut self) {
+    pub const fn model_picker_select_next(&mut self) {
         if let Some(modal) = &mut self.model_picker_modal {
             modal.select_next();
         }

@@ -8,7 +8,7 @@ pub struct InputHistory {
 
 impl InputHistory {
     #[must_use]
-    pub fn new() -> Self {
+    pub const fn new() -> Self {
         Self {
             entries: Vec::new(),
             index: None,
@@ -62,17 +62,17 @@ impl InputHistory {
         self.entries.get(i + 1).cloned()
     }
 
-    pub fn reset_index(&mut self) {
+    pub const fn reset_index(&mut self) {
         self.index = None;
     }
 
     #[must_use]
-    pub fn is_empty(&self) -> bool {
+    pub const fn is_empty(&self) -> bool {
         self.entries.is_empty()
     }
 
     #[must_use]
-    pub fn len(&self) -> usize {
+    pub const fn len(&self) -> usize {
         self.entries.len()
     }
 }

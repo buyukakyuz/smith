@@ -206,12 +206,11 @@ impl TypedTool for GrepTool {
                     continue;
                 }
 
-                if let Some(ref glob) = glob_matcher {
-                    if let Some(file_name) = entry_path.file_name() {
-                        if !glob.is_match(file_name) {
-                            continue;
-                        }
-                    }
+                if let Some(ref glob) = glob_matcher
+                    && let Some(file_name) = entry_path.file_name()
+                    && !glob.is_match(file_name)
+                {
+                    continue;
                 }
 
                 let should_continue = Self::search_file(

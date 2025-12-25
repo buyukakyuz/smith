@@ -164,8 +164,7 @@ fn build_custom_config(model: &ModelInfo) -> Result<OpenAICompatConfig> {
                 if let Some(api_key_env) = model.api_key_env() {
                     let api_key = ApiKey::from_env(api_key_env).map_err(|_| {
                         AgentError::Config(format!(
-                            "API key not found. Set {} environment variable for custom provider.",
-                            api_key_env
+                            "API key not found. Set {api_key_env} environment variable for custom provider."
                         ))
                     })?;
                     config = config.with_bearer_auth(api_key);
@@ -176,8 +175,7 @@ fn build_custom_config(model: &ModelInfo) -> Result<OpenAICompatConfig> {
                     if let Some(api_key_env) = model.api_key_env() {
                         let api_key = ApiKey::from_env(api_key_env).map_err(|_| {
                             AgentError::Config(format!(
-                                "API key not found. Set {} environment variable for custom provider.",
-                                api_key_env
+                                "API key not found. Set {api_key_env} environment variable for custom provider."
                             ))
                         })?;
                         config.auth = OpenAICompatAuth::CustomHeader {

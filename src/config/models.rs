@@ -23,7 +23,7 @@ pub enum ProviderType {
 
 impl ProviderType {
     #[must_use]
-    pub fn default_api_key_env(&self) -> Option<&'static str> {
+    pub const fn default_api_key_env(&self) -> Option<&'static str> {
         match self {
             Self::Anthropic => Some("ANTHROPIC_API_KEY"),
             Self::OpenAI => Some("OPENAI_API_KEY"),
@@ -40,7 +40,7 @@ impl ProviderType {
     }
 
     #[must_use]
-    pub fn default_base_url(&self) -> Option<&'static str> {
+    pub const fn default_base_url(&self) -> Option<&'static str> {
         match self {
             Self::Anthropic => Some("https://api.anthropic.com"),
             Self::OpenAI => Some("https://api.openai.com/v1"),
@@ -57,7 +57,7 @@ impl ProviderType {
     }
 
     #[must_use]
-    pub fn is_openai_compatible(&self) -> bool {
+    pub const fn is_openai_compatible(&self) -> bool {
         matches!(
             self,
             Self::OpenRouter
@@ -72,7 +72,7 @@ impl ProviderType {
     }
 
     #[must_use]
-    pub fn display_name(&self) -> &'static str {
+    pub const fn display_name(&self) -> &'static str {
         match self {
             Self::Anthropic => "Anthropic",
             Self::OpenAI => "OpenAI",
@@ -126,7 +126,7 @@ pub struct ModelInfo {
     pub config: Option<ModelProviderConfig>,
 }
 
-fn default_true() -> bool {
+const fn default_true() -> bool {
     true
 }
 
@@ -215,11 +215,11 @@ impl ModelRegistry {
         ];
 
         for provider in provider_order {
-            if let Some(indices) = self.by_provider.get(&provider) {
-                if !indices.is_empty() {
-                    let models = indices.iter().map(|&idx| &self.models[idx]).collect();
-                    result.push((provider, models));
-                }
+            if let Some(indices) = self.by_provider.get(&provider)
+                && !indices.is_empty()
+            {
+                let models = indices.iter().map(|&idx| &self.models[idx]).collect();
+                result.push((provider, models));
             }
         }
 

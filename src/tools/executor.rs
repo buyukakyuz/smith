@@ -16,6 +16,7 @@ pub struct ToolExecutor<'a> {
 }
 
 impl<'a> ToolExecutor<'a> {
+    #[must_use]
     pub fn new(
         tools: &'a ToolRegistry,
         permission_manager: Option<&'a Arc<PermissionManager>>,

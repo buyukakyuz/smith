@@ -63,6 +63,7 @@ pub fn validate_file_size(path: &Path, tool_type: ToolType) -> Result<u64> {
     Ok(size)
 }
 
+#[must_use]
 pub fn walk_builder_with_gitignore(path: &Path, respect_gitignore: bool) -> WalkBuilder {
     let mut builder = WalkBuilder::new(path);
     builder

@@ -9,7 +9,7 @@ enum Selection {
 }
 
 impl Selection {
-    fn from_index(index: usize) -> Self {
+    const fn from_index(index: usize) -> Self {
         match index {
             0 => Self::AllowOnce,
             1 => Self::AllowSession,
@@ -27,7 +27,8 @@ pub struct PermissionModal {
 }
 
 impl PermissionModal {
-    pub fn new(
+    #[must_use]
+    pub const fn new(
         request: PermissionRequest,
         response_tx: oneshot::Sender<PermissionResponse>,
     ) -> Self {
@@ -41,12 +42,12 @@ impl PermissionModal {
     }
 
     #[must_use]
-    pub fn selected_index(&self) -> usize {
+    pub const fn selected_index(&self) -> usize {
         self.selected
     }
 
     #[must_use]
-    pub fn is_input_mode(&self) -> bool {
+    pub const fn is_input_mode(&self) -> bool {
         self.input_mode
     }
 
@@ -91,6 +92,7 @@ impl PermissionModal {
         }
     }
 
+    #[must_use]
     pub fn confirm(self) -> Option<String> {
         let (response, feedback) = match Selection::from_index(self.selected) {
             Selection::AllowOnce => (PermissionResponse::AllowOnce, None),

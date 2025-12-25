@@ -18,10 +18,10 @@ pub async fn terminal_event_loop(tx: UnboundedSender<AppEvent>) -> Result<()> {
                 _ => None,
             };
 
-            if let Some(event) = app_event {
-                if tx.send(event).is_err() {
-                    break;
-                }
+            if let Some(event) = app_event
+                && tx.send(event).is_err()
+            {
+                break;
             }
         }
     }

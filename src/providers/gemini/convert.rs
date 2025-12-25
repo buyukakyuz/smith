@@ -12,11 +12,7 @@ use super::types::{
 };
 
 pub fn to_api_request(request: &CompletionRequest) -> ApiRequest {
-    let contents: Vec<Content> = request
-        .messages
-        .iter()
-        .filter_map(|msg| to_content(msg))
-        .collect();
+    let contents: Vec<Content> = request.messages.iter().filter_map(to_content).collect();
 
     let system_instruction = request.system_prompt.as_ref().map(|prompt| Content {
         role: "user".to_string(),
@@ -234,8 +230,7 @@ pub fn from_api_response(response: ApiResponse) -> CompletionResponse {
 
     let (content_blocks, has_function_calls) = candidate
         .and_then(|c| c.content.as_ref())
-        .map(|content| from_content(content))
-        .unwrap_or_else(|| (vec![], false));
+        .map_or_else(|| (vec![], false), from_content);
 
     let message = Message {
         role: Role::Assistant,
@@ -247,13 +242,12 @@ pub fn from_api_response(response: ApiResponse) -> CompletionResponse {
     } else {
         candidate
             .and_then(|c| c.finish_reason.as_ref())
-            .map(|reason| match reason.as_str() {
+            .map_or(StopReason::EndTurn, |reason| match reason.as_str() {
                 "STOP" => StopReason::EndTurn,
                 "MAX_TOKENS" => StopReason::MaxTokens,
                 "STOP_SEQUENCE" => StopReason::StopSequence,
                 _ => StopReason::EndTurn,
             })
-            .unwrap_or(StopReason::EndTurn)
     };
 
     let usage = response.usage_metadata.map_or_else(Usage::default, |u| {
@@ -302,13 +296,12 @@ pub fn parse_stream_event(data: &str) -> Option<CoreStreamEvent> {
         let stop_reason = candidate
             .finish_reason
             .as_ref()
-            .map(|reason| match reason.as_str() {
+            .map_or(StopReason::EndTurn, |reason| match reason.as_str() {
                 "STOP" => StopReason::EndTurn,
                 "MAX_TOKENS" => StopReason::MaxTokens,
                 "STOP_SEQUENCE" => StopReason::StopSequence,
                 _ => StopReason::EndTurn,
-            })
-            .unwrap_or(StopReason::EndTurn);
+            });
 
         return Some(CoreStreamEvent::MessageDelta {
             delta: MessageDelta {

@@ -14,8 +14,7 @@ pub fn create_provider_for_cli(cli: &Cli, config: &AppConfig) -> Result<Arc<dyn 
     let model_info = if let Some(id) = model_id {
         registry.get_model(id).ok_or_else(|| {
             AgentError::Config(format!(
-                "Model '{}' not found in models.toml. Add it to your configuration.",
-                id
+                "Model '{id}' not found in models.toml. Add it to your configuration."
             ))
         })?
     } else {

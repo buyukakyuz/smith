@@ -82,11 +82,11 @@ impl AgentRunner {
         while let Some(cmd) = self.cmd_rx.recv().await {
             match cmd {
                 AgentCommand::Run { user_message } => {
-                    if self.agent.is_none() {
-                        if let Err(e) = self.initialize_agent() {
-                            let _ = self.event_tx.send(AppEvent::LLMError(e.to_string()));
-                            continue;
-                        }
+                    if self.agent.is_none()
+                        && let Err(e) = self.initialize_agent()
+                    {
+                        let _ = self.event_tx.send(AppEvent::LLMError(e.to_string()));
+                        continue;
                     }
                     self.run_agent_with_events(user_message).await;
                 }
@@ -105,9 +105,9 @@ impl AgentRunner {
         let registry = ModelRegistry::load();
 
         let model_info = if let Some(id) = &self.agent_config.model_id {
-            registry.get_model(id).ok_or_else(|| {
-                AgentError::Config(format!("Model '{}' not found in registry", id))
-            })?
+            registry
+                .get_model(id)
+                .ok_or_else(|| AgentError::Config(format!("Model '{id}' not found in registry")))?
         } else {
             registry
                 .default_model()
@@ -211,15 +211,13 @@ impl AgentRunner {
     fn switch_model(&mut self, model_id: &str) {
         let registry = ModelRegistry::load();
 
-        let model_info = match registry.get_model(model_id) {
-            Some(info) => info,
-            None => {
-                let _ = self.event_tx.send(AppEvent::ModelSwitchError(format!(
-                    "Model '{}' not found",
-                    model_id
-                )));
-                return;
-            }
+        let model_info = if let Some(info) = registry.get_model(model_id) {
+            info
+        } else {
+            let _ = self.event_tx.send(AppEvent::ModelSwitchError(format!(
+                "Model '{model_id}' not found"
+            )));
+            return;
         };
 
         self.agent_config.model_id = Some(model_id.to_string());
@@ -241,41 +239,39 @@ impl AgentRunner {
                         .send(AppEvent::ModelSwitchError(e.to_string()));
                 }
             }
-        } else {
-            if let Err(e) = self.create_agent_from_model(model_info) {
-                let _ = self
-                    .event_tx
-                    .send(AppEvent::ModelSwitchError(e.to_string()));
-            }
+        } else if let Err(e) = self.create_agent_from_model(model_info) {
+            let _ = self
+                .event_tx
+                .send(AppEvent::ModelSwitchError(e.to_string()));
         }
     }
 
     async fn run_agent_with_events(&mut self, message: String) {
         use crate::core::types::{ContentDelta, StreamEvent};
 
-        let agent = match &mut self.agent {
-            Some(a) => a,
-            None => {
-                let _ = self
-                    .event_tx
-                    .send(AppEvent::LLMError("Agent not initialized".to_string()));
-                return;
-            }
+        let agent = if let Some(a) = &mut self.agent {
+            a
+        } else {
+            let _ = self
+                .event_tx
+                .send(AppEvent::LLMError("Agent not initialized".to_string()));
+            return;
         };
 
         let event_tx = self.event_tx.clone();
 
         let result = agent
-            .run(message, |stream_event| match stream_event {
-                StreamEvent::ContentBlockDelta { delta, .. } => match delta {
-                    ContentDelta::TextDelta { text } => {
-                        let _ = event_tx.send(AppEvent::LLMChunk(text.clone()));
+            .run(message, |stream_event| {
+                if let StreamEvent::ContentBlockDelta { delta, .. } = stream_event {
+                    match delta {
+                        ContentDelta::TextDelta { text } => {
+                            let _ = event_tx.send(AppEvent::LLMChunk(text.clone()));
+                        }
+                        ContentDelta::ThinkingDelta { .. }
+                        | ContentDelta::SignatureDelta { .. }
+                        | ContentDelta::InputJsonDelta { .. } => {}
                     }
-                    ContentDelta::ThinkingDelta { .. }
-                    | ContentDelta::SignatureDelta { .. }
-                    | ContentDelta::InputJsonDelta { .. } => {}
-                },
-                _ => {}
+                }
             })
             .await;
 

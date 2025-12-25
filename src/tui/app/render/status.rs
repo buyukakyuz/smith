@@ -7,9 +7,9 @@ use std::time::Duration;
 
 fn format_tokens(count: u32) -> String {
     if count >= 1_000_000 {
-        format!("{:.1}M", count as f64 / 1_000_000.0)
+        format!("{:.1}M", f64::from(count) / 1_000_000.0)
     } else if count >= 1_000 {
-        format!("{:.1}K", count as f64 / 1_000.0)
+        format!("{:.1}K", f64::from(count) / 1_000.0)
     } else {
         count.to_string()
     }

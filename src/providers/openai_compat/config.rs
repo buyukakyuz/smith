@@ -16,6 +16,7 @@ pub struct ExtraHeaders {
 }
 
 impl ExtraHeaders {
+    #[must_use]
     pub fn new() -> Self {
         Self {
             headers: HashMap::new(),
@@ -64,6 +65,7 @@ impl OpenAICompatConfig {
         }
     }
 
+    #[must_use]
     pub fn with_bearer_auth(mut self, key: ApiKey) -> Self {
         self.auth = OpenAICompatAuth::Bearer(key);
         self
@@ -84,7 +86,8 @@ impl OpenAICompatConfig {
         self
     }
 
-    pub fn with_capabilities(mut self, caps: ProviderCapabilities) -> Self {
+    #[must_use]
+    pub const fn with_capabilities(mut self, caps: ProviderCapabilities) -> Self {
         self.capabilities = caps;
         self
     }
@@ -94,6 +97,7 @@ impl OpenAICompatConfig {
         self
     }
 
+    #[must_use]
     pub fn resolve_model(&self, model: &str) -> String {
         self.model_aliases
             .get(model)
@@ -101,6 +105,7 @@ impl OpenAICompatConfig {
             .unwrap_or_else(|| model.to_string())
     }
 
+    #[must_use]
     pub fn openrouter(api_key: ApiKey) -> Self {
         let mut config = Self::custom("openrouter", "https://openrouter.ai/api")
             .with_bearer_auth(api_key)
@@ -124,6 +129,7 @@ impl OpenAICompatConfig {
         config
     }
 
+    #[must_use]
     pub fn together(api_key: ApiKey) -> Self {
         Self::custom("together", "https://api.together.xyz")
             .with_bearer_auth(api_key)
@@ -137,6 +143,7 @@ impl OpenAICompatConfig {
             })
     }
 
+    #[must_use]
     pub fn ollama() -> Self {
         Self::custom("ollama", "http://localhost:11434").with_capabilities(ProviderCapabilities {
             vision: true,
@@ -147,6 +154,7 @@ impl OpenAICompatConfig {
         })
     }
 
+    #[must_use]
     pub fn groq(api_key: ApiKey) -> Self {
         Self::custom("groq", "https://api.groq.com/openai")
             .with_bearer_auth(api_key)
@@ -196,6 +204,7 @@ impl OpenAICompatConfig {
         config
     }
 
+    #[must_use]
     pub fn fireworks(api_key: ApiKey) -> Self {
         Self::custom("fireworks", "https://api.fireworks.ai/inference")
             .with_bearer_auth(api_key)
