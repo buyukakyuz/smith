@@ -141,18 +141,23 @@ impl AppState {
     }
 
     pub fn permission_confirm(&mut self) -> Option<String> {
-        self.permission_modal.take().and_then(|m| m.confirm())
+        self.permission_modal
+            .take()
+            .and_then(PermissionModal::confirm)
     }
 
     pub fn permission_cancel(&mut self) -> bool {
-        self.permission_modal.take().map(|m| m.cancel()).is_some()
+        self.permission_modal
+            .take()
+            .map(PermissionModal::cancel)
+            .is_some()
     }
 
     #[must_use]
     pub fn permission_in_input_mode(&self) -> bool {
         self.permission_modal
             .as_ref()
-            .map_or(false, |m| m.is_input_mode())
+            .is_some_and(PermissionModal::is_input_mode)
     }
 
     pub fn permission_select_prev(&mut self) {
@@ -213,7 +218,7 @@ impl AppState {
         self.history.next()
     }
 
-    pub fn record_usage(&mut self, usage: Usage) {
+    pub const fn record_usage(&mut self, usage: Usage) {
         self.last_usage = Some(usage);
         self.session_usage.add(&usage);
     }
