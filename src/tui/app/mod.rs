@@ -146,7 +146,7 @@ impl TuiApp {
             })?;
 
             if let Some(event) = self.event_rx.recv().await {
-                self.handle_event(event)?;
+                self.handle_event(event);
             }
         }
 
@@ -157,14 +157,14 @@ impl TuiApp {
         Ok(())
     }
 
-    fn handle_event(&mut self, event: AppEvent) -> Result<()> {
+    fn handle_event(&mut self, event: AppEvent) {
         match event {
             AppEvent::Input(key) => {
-                self.handle_key_input(key)?;
+                self.handle_key_input(key);
             }
             AppEvent::Paste(text) => {
                 let action = self.input_widget.handle_paste(text);
-                self.handle_input_action(action)?;
+                self.handle_input_action(action);
             }
             AppEvent::Resize(_w, _h) => {}
             AppEvent::MouseScroll(delta) => {
@@ -245,75 +245,67 @@ impl TuiApp {
                 );
             }
         }
-
-        Ok(())
     }
 
-    fn handle_key_input(&mut self, key: crossterm::event::KeyEvent) -> Result<()> {
+    fn handle_key_input(&mut self, key: crossterm::event::KeyEvent) {
         if key.code == KeyCode::Char('c') && key.modifiers.contains(KeyModifiers::CONTROL) {
             if self.state.has_model_picker() {
                 self.state.model_picker_cancel();
-                return Ok(());
+                return;
             }
             if self.state.has_modal() {
                 self.state.permission_cancel();
-                return Ok(());
+                return;
             }
             if !self.input_widget.is_empty() {
                 self.input_widget.clear();
-                return Ok(());
+                return;
             }
             self.state.quit();
-            return Ok(());
+            return;
         }
-
         if key.code == KeyCode::Char('d') && key.modifiers.contains(KeyModifiers::CONTROL) {
             if self.input_widget.is_empty() && !self.state.has_modal() {
                 self.state.quit();
             }
-            return Ok(());
+            return;
         }
-
         if self.state.has_model_picker() {
-            return self.handle_model_picker_input(key);
+            self.handle_model_picker_input(key);
+            return;
         }
-
         if self.state.has_modal() {
-            return self.handle_modal_input(key);
+            self.handle_modal_input(key);
+            return;
         }
-
         if key.code == KeyCode::Char('l') && key.modifiers.contains(KeyModifiers::CONTROL) {
             self.state.clear_messages();
-            return Ok(());
+            return;
         }
-
         match key.code {
             KeyCode::PageUp => {
                 self.state.scroll_up(10);
-                return Ok(());
+                return;
             }
             KeyCode::PageDown => {
                 self.state.scroll_down(10);
-                return Ok(());
+                return;
             }
             KeyCode::Home if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.state.scroll_to_top();
-                return Ok(());
+                return;
             }
             KeyCode::End if key.modifiers.contains(KeyModifiers::CONTROL) => {
                 self.state.scroll_to_bottom();
-                return Ok(());
+                return;
             }
             _ => {}
         }
-
         let action = self.input_widget.handle_key(key);
-        self.handle_input_action(action)?;
-
-        Ok(())
+        self.handle_input_action(action);
     }
 
-    fn handle_modal_input(&mut self, key: crossterm::event::KeyEvent) -> Result<()> {
+    fn handle_modal_input(&mut self, key: crossterm::event::KeyEvent) {
         if self.state.permission_in_input_mode() {
             match key.code {
                 KeyCode::Enter => {
@@ -337,7 +329,7 @@ impl TuiApp {
                 }
                 _ => {}
             }
-            return Ok(());
+            return;
         }
 
         match key.code {
@@ -347,17 +339,6 @@ impl TuiApp {
             KeyCode::Down | KeyCode::Char('j') => {
                 self.state.permission_select_next();
             }
-            KeyCode::Char('1') => {
-                self.state.permission_set_selection(0);
-                self.state.permission_confirm();
-            }
-            KeyCode::Char('2') => {
-                self.state.permission_set_selection(1);
-                self.state.permission_confirm();
-            }
-            KeyCode::Char('3' | 'n') => {
-                self.state.permission_set_selection(2);
-            }
             KeyCode::Enter => {
                 if let Some(feedback) = self.state.permission_confirm() {
                     self.state.add_system_message(format!("Denied: {feedback}"));
@@ -366,16 +347,11 @@ impl TuiApp {
             KeyCode::Esc => {
                 self.state.permission_cancel();
             }
-            KeyCode::Char('y') => {
-                self.state.permission_set_selection(0);
-                self.state.permission_confirm();
-            }
             _ => {}
         }
-        Ok(())
     }
 
-    fn handle_model_picker_input(&mut self, key: crossterm::event::KeyEvent) -> Result<()> {
+    fn handle_model_picker_input(&mut self, key: crossterm::event::KeyEvent) {
         match key.code {
             KeyCode::Up | KeyCode::Char('k') => {
                 self.state.model_picker_select_prev();
@@ -395,12 +371,11 @@ impl TuiApp {
             }
             _ => {}
         }
-        Ok(())
     }
 
-    fn handle_input_action(&mut self, action: InputAction) -> Result<()> {
+    fn handle_input_action(&mut self, action: InputAction) {
         match action {
-            InputAction::Continue => {}
+            InputAction::Continue | InputAction::Clear => {}
 
             InputAction::Submit(text) => {
                 if text.starts_with('/') {
@@ -429,11 +404,7 @@ impl TuiApp {
                     self.input_widget.clear();
                 }
             }
-
-            InputAction::Clear => {}
         }
-
-        Ok(())
     }
 
     fn handle_slash_command(&mut self, command: &str) {

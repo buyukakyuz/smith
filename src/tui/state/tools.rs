@@ -44,6 +44,7 @@ impl AppState {
         self.scroll.reset_manual_scroll();
     }
 
+    #[allow(clippy::needless_pass_by_value)]
     pub fn fail_tool(&mut self, name: &str, error: String) {
         let Some(execution) = self.active_tools.remove(name) else {
             return;

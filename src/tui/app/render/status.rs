@@ -1,3 +1,4 @@
+#![allow(clippy::cast_possible_truncation)]
 use crate::core::types::Usage;
 use crate::ui::theme::{Spinners, Theme};
 use ratatui::Frame;
