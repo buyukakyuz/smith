@@ -1,5 +1,3 @@
-#![allow(clippy::cast_possible_truncation)]
-
 use ratatui::Frame;
 use ratatui::buffer::Buffer;
 use ratatui::layout::{Position, Rect};

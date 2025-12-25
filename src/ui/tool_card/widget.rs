@@ -1,4 +1,3 @@
-#![allow(clippy::cast_possible_truncation)]
 use ratatui::{buffer::Buffer, layout::Rect, widgets::Widget};
 
 use super::card::ToolCard;

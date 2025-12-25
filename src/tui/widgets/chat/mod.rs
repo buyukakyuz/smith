@@ -1,4 +1,3 @@
-#![allow(clippy::cast_possible_truncation)]
 mod message;
 mod render;
 mod scroll_state;

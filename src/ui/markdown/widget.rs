@@ -1,4 +1,3 @@
-#![allow(clippy::cast_possible_truncation)]
 use markdown::{ParseOptions, to_mdast};
 use ratatui::{
     buffer::Buffer,
