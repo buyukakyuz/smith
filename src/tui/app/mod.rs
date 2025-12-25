@@ -210,7 +210,7 @@ impl TuiApp {
                         new_content: metadata.new_content,
                     });
                 }
-                self.state.complete_tool(&name, result);
+                self.state.complete_tool(&name, &result);
             }
             AppEvent::ToolFailed { name, error } => {
                 self.state.fail_tool(&name, error);

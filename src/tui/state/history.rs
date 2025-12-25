@@ -34,7 +34,7 @@ impl InputHistory {
     }
 
     #[must_use]
-    pub fn prev(&mut self) -> Option<String> {
+    pub fn move_back(&mut self) -> Option<String> {
         if self.entries.is_empty() {
             return None;
         }
@@ -50,7 +50,7 @@ impl InputHistory {
     }
 
     #[must_use]
-    pub fn next(&mut self) -> Option<String> {
+    pub fn move_forward(&mut self) -> Option<String> {
         let i = self.index?;
 
         if i >= self.entries.len() - 1 {
@@ -109,14 +109,14 @@ mod tests {
         history.push("two".to_string());
         history.push("three".to_string());
 
-        assert_eq!(history.prev(), Some("three".to_string()));
-        assert_eq!(history.prev(), Some("two".to_string()));
-        assert_eq!(history.prev(), Some("one".to_string()));
-        assert_eq!(history.prev(), Some("one".to_string()));
+        assert_eq!(history.move_back(), Some("three".to_string()));
+        assert_eq!(history.move_back(), Some("two".to_string()));
+        assert_eq!(history.move_back(), Some("one".to_string()));
+        assert_eq!(history.move_back(), Some("one".to_string()));
 
-        assert_eq!(history.next(), Some("two".to_string()));
-        assert_eq!(history.next(), Some("three".to_string()));
-        assert_eq!(history.next(), None);
+        assert_eq!(history.move_forward(), Some("two".to_string()));
+        assert_eq!(history.move_forward(), Some("three".to_string()));
+        assert_eq!(history.move_forward(), None);
     }
 
     #[test]
@@ -132,7 +132,7 @@ mod tests {
         history.reset_index();
         let mut oldest = None;
         for _ in 0..MAX_HISTORY_SIZE {
-            oldest = history.prev();
+            oldest = history.move_back();
         }
         assert_eq!(oldest, Some("entry 50".to_string()));
     }

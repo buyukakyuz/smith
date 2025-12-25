@@ -26,7 +26,7 @@ impl AppState {
         );
     }
 
-    pub fn complete_tool(&mut self, name: &str, result: ToolResult) {
+    pub fn complete_tool(&mut self, name: &str, result: &ToolResult) {
         let Some(execution) = self.active_tools.remove(name) else {
             return;
         };

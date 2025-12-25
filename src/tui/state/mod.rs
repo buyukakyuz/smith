@@ -211,11 +211,11 @@ impl AppState {
     }
 
     pub fn history_prev(&mut self) -> Option<String> {
-        self.history.prev()
+        self.history.move_back()
     }
 
     pub fn history_next(&mut self) -> Option<String> {
-        self.history.next()
+        self.history.move_forward()
     }
 
     pub const fn record_usage(&mut self, usage: Usage) {
