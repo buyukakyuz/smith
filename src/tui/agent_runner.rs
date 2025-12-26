@@ -206,9 +206,7 @@ impl AgentRunner {
     fn switch_model(&mut self, model_id: &str) {
         let registry = ModelRegistry::load();
 
-        let model_info = if let Some(info) = registry.get_model(model_id) {
-            info
-        } else {
+        let Some(model_info) = registry.get_model(model_id) else {
             let _ = self.event_tx.send(AppEvent::ModelSwitchError(format!(
                 "Model '{model_id}' not found"
             )));
@@ -244,9 +242,7 @@ impl AgentRunner {
     async fn run_agent_with_events(&mut self, message: String) {
         use crate::core::types::{ContentDelta, StreamEvent};
 
-        let agent = if let Some(a) = &mut self.agent {
-            a
-        } else {
+        let Some(agent) = &mut self.agent else {
             let _ = self
                 .event_tx
                 .send(AppEvent::LLMError("Agent not initialized".to_string()));

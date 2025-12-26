@@ -312,7 +312,7 @@ pub fn parse_stream_event(data: &str, state: &mut StreamState) -> Option<CoreStr
 
     let chunk: super::types::ChatCompletionChunk = match serde_json::from_str(data) {
         Ok(c) => c,
-        Err(e) => {
+        Err(_e) => {
             return None;
         }
     };
@@ -367,29 +367,29 @@ pub fn parse_stream_event(data: &str, state: &mut StreamState) -> Option<CoreStr
                     partial.arguments.push_str(args);
                 }
 
-                if let (Some(id), Some(name)) = (&partial.id, &partial.name) {
-                    if !partial.started {
-                        partial.started = true;
-                        if !partial.arguments.is_empty() {
-                            partial.pending_args = Some(partial.arguments.clone());
-                        }
-
-                        return Some(CoreStreamEvent::ContentBlockStart {
-                            index,
-                            content_block: ContentBlock::ToolUse {
-                                id: id.clone(),
-                                name: name.clone(),
-                                input: serde_json::json!({}),
-                                signature: None,
-                            },
-                        });
+                if let (Some(id), Some(name)) = (&partial.id, &partial.name)
+                    && !partial.started
+                {
+                    partial.started = true;
+                    if !partial.arguments.is_empty() {
+                        partial.pending_args = Some(partial.arguments.clone());
                     }
+
+                    return Some(CoreStreamEvent::ContentBlockStart {
+                        index,
+                        content_block: ContentBlock::ToolUse {
+                            id: id.clone(),
+                            name: name.clone(),
+                            input: serde_json::json!({}),
+                            signature: None,
+                        },
+                    });
                 }
 
                 let new_args = function.arguments.as_ref();
                 if pending.is_some() || new_args.is_some() {
                     let combined = match (pending, new_args) {
-                        (Some(p), Some(n)) => format!("{}{}", p, n),
+                        (Some(p), Some(n)) => format!("{p}{n}"),
                         (Some(p), None) => p,
                         (None, Some(n)) => n.clone(),
                         (None, None) => unreachable!(),

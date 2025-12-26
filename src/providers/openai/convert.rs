@@ -258,7 +258,7 @@ pub fn parse_stream_event(event_type: Option<&str>, data: &str) -> Option<CoreSt
                         text: String::new(),
                     },
                 }),
-                OutputItem::Reasoning(r) => None,
+                OutputItem::Reasoning(_r) => None,
             }
         }
         "response.completed" | "response.done" => {
