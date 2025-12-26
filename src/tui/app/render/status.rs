@@ -23,10 +23,10 @@ fn render_hints(buf: &mut Buffer, area: Rect) {
     buf.set_line(area.x, area.y, &line, HINTS.len() as u16 + 2);
 }
 
-fn render_right_text(buf: &mut Buffer, area: Rect, line: Line) {
+fn render_right_text(buf: &mut Buffer, area: Rect, line: &Line) {
     let width = (line.width() + 1) as u16;
     let x = area.x + area.width.saturating_sub(width);
-    buf.set_line(x, area.y, &line, width);
+    buf.set_line(x, area.y, line, width);
 }
 
 fn format_elapsed(elapsed: Option<Duration>) -> String {
@@ -74,9 +74,9 @@ pub fn render_status(
         let spinner = Spinners::BRAILLE[spinner_frame % Spinners::BRAILLE.len()];
         let status = format!("{spinner} Processing{}", format_elapsed(elapsed));
         let line = Line::from(vec![Span::styled(status, Theme::warning()), Span::raw(" ")]);
-        render_right_text(buf, area, line);
+        render_right_text(buf, area, &line);
     } else if let Some(usage) = format_usage(last_usage, session_usage) {
         let line = Line::from(vec![Span::styled(usage, Theme::muted()), Span::raw(" ")]);
-        render_right_text(buf, area, line);
+        render_right_text(buf, area, &line);
     }
 }
