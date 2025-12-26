@@ -147,8 +147,6 @@ impl TypedTool for BashTool {
     }
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
-        tracing::debug!("Executing bash command: {}", input.command);
-
         let working_dir = if let Some(dir_str) = &input.working_dir {
             let dir_path = Path::new(dir_str);
 
@@ -185,15 +183,12 @@ impl TypedTool for BashTool {
                 });
             }
 
-            tracing::debug!("Using working directory: {}", dir_str);
             Some(dir_path)
         } else {
             None
         };
 
         let timeout_secs = input.timeout_secs.unwrap_or(DEFAULT_TIMEOUT_SECS);
-        tracing::debug!("Bash timeout: {}s", timeout_secs);
-
         let result = Self::execute_command(
             &input.command,
             working_dir,

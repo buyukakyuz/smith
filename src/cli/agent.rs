@@ -54,12 +54,12 @@ fn build_system_prompt(
 fn infer_template_type(llm: &Arc<dyn LLM>) -> TemplateType {
     let name_lower = llm.name().to_lowercase();
 
-    if name_lower.contains("gpt") || name_lower.contains("openai") {
-        TemplateType::OpenAI
+    if name_lower.contains("anthropic") || name_lower.contains("claude") {
+        TemplateType::Claude
     } else if name_lower.contains("gemini") {
         TemplateType::Gemini
     } else {
-        TemplateType::Claude
+        TemplateType::OpenAI
     }
 }
 

@@ -51,11 +51,10 @@ impl TuiApp {
     ) -> Result<Self> {
         let terminal = setup_terminal()?;
 
-        let (provider_name, model_name) = if let Some(id) = &agent_config.model_id {
-            (String::new(), id.clone())
-        } else {
-            (String::new(), "(select model)".to_string())
-        };
+        let (provider_name, model_name) = agent_config.model_id.as_ref().map_or_else(
+            || (String::new(), "(select model)".to_string()),
+            |id| (String::new(), id.clone()),
+        );
 
         let (runner, agent_cmd_tx) = AgentRunner::new(agent_config, event_tx.clone());
         tokio::spawn(async move {
@@ -133,7 +132,7 @@ impl TuiApp {
                     elapsed,
                     spinner_frame,
                     last_usage.as_ref(),
-                    &session_usage,
+                    session_usage,
                 );
 
                 if let Some((request, selected, input_mode, feedback)) = &permission_modal {

@@ -59,10 +59,12 @@ impl AugmentedLLM {
         use crate::core::prompt::TemplateType;
 
         let name = self.llm.name().to_lowercase();
-        let template_type = if name.contains("gpt") || name.contains("openai") {
-            TemplateType::OpenAI
-        } else {
+        let template_type = if name.contains("anthropic") || name.contains("claude") {
             TemplateType::Claude
+        } else if name.contains("gemini") {
+            TemplateType::Gemini
+        } else {
+            TemplateType::OpenAI
         };
 
         let prompt = PromptBuilder::new()

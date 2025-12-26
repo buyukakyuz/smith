@@ -45,7 +45,6 @@ impl ConfigEventHandler {
             ConfigEvent::ModelChanged { provider, model } => {
                 let patch = ConfigPatch::model(provider, model);
                 self.persister.apply_patch(&patch)?;
-                tracing::debug!("Persisted model change: {}/{}", provider, model);
                 Ok(())
             }
         }

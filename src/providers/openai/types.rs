@@ -88,6 +88,22 @@ pub enum OutputItem {
     Message(OutputMessage),
     #[serde(rename = "function_call")]
     FunctionCall(FunctionCall),
+    #[serde(rename = "reasoning")]
+    Reasoning(ReasoningItem),
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ReasoningItem {
+    pub id: String,
+    #[serde(default)]
+    pub summary: Vec<ReasoningSummary>,
+}
+
+#[derive(Debug, Deserialize, Clone)]
+pub struct ReasoningSummary {
+    #[serde(rename = "type")]
+    pub summary_type: String,
+    pub text: String,
 }
 
 #[derive(Debug, Deserialize, Clone)]

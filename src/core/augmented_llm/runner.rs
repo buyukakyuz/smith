@@ -96,7 +96,8 @@ impl AugmentedLLM {
         }
 
         if !self.tools.is_empty() {
-            request = request.with_tools(self.tools.definitions());
+            let defs = self.tools.definitions();
+            request = request.with_tools(defs);
         }
 
         request

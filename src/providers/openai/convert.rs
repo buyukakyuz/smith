@@ -149,6 +149,7 @@ pub fn from_api_response(response: ApiResponse) -> CompletionResponse {
             OutputItem::FunctionCall(fc) => {
                 content.push(from_function_call(&fc));
             }
+            OutputItem::Reasoning(_) => {}
         }
     }
 
@@ -257,6 +258,7 @@ pub fn parse_stream_event(event_type: Option<&str>, data: &str) -> Option<CoreSt
                         text: String::new(),
                     },
                 }),
+                OutputItem::Reasoning(r) => None,
             }
         }
         "response.completed" | "response.done" => {
@@ -264,7 +266,13 @@ pub fn parse_stream_event(event_type: Option<&str>, data: &str) -> Option<CoreSt
             struct StreamingResponseEvent {
                 response: ApiResponse,
             }
-            let parsed: StreamingResponseEvent = serde_json::from_str(data).ok()?;
+            let parsed: StreamingResponseEvent = match serde_json::from_str(data) {
+                Ok(p) => p,
+                Err(e) => {
+                    tracing::error!("Failed to parse response.completed: {}", e);
+                    return None;
+                }
+            };
             let usage = parsed
                 .response
                 .usage

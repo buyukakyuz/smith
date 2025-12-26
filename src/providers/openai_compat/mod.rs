@@ -252,6 +252,9 @@ impl LLM for OpenAICompatProvider {
         let mut api_request = convert::to_api_request(&self.config, &request);
         api_request.model = self.config.resolve_model(self.model.as_str());
         api_request.stream = Some(true);
+        api_request.stream_options = Some(types::StreamOptions {
+            include_usage: true,
+        });
 
         let url = self.endpoint();
 

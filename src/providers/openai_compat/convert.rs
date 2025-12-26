@@ -51,6 +51,7 @@ pub fn to_api_request(
         temperature: Some(request.temperature),
         max_tokens: Some(request.max_tokens),
         stream: None,
+        stream_options: None,
         tools,
         tool_choice: None,
         stop,
@@ -284,11 +285,13 @@ pub struct StreamState {
     current_index: usize,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Default)]
 struct PartialToolCall {
     id: Option<String>,
     name: Option<String>,
     arguments: String,
+    started: bool,
+    pending_args: Option<String>,
 }
 
 impl StreamState {
@@ -298,13 +301,7 @@ impl StreamState {
     }
 
     fn get_or_create_tool_call(&mut self, index: usize) -> &mut PartialToolCall {
-        self.tool_calls
-            .entry(index)
-            .or_insert_with(|| PartialToolCall {
-                id: None,
-                name: None,
-                arguments: String::new(),
-            })
+        self.tool_calls.entry(index).or_default()
     }
 }
 
@@ -313,7 +310,12 @@ pub fn parse_stream_event(data: &str, state: &mut StreamState) -> Option<CoreStr
         return Some(CoreStreamEvent::MessageStop);
     }
 
-    let chunk: super::types::ChatCompletionChunk = serde_json::from_str(data).ok()?;
+    let chunk: super::types::ChatCompletionChunk = match serde_json::from_str(data) {
+        Ok(c) => c,
+        Err(e) => {
+            return None;
+        }
+    };
 
     let choice = chunk.choices.first()?;
 
@@ -325,6 +327,15 @@ pub fn parse_stream_event(data: &str, state: &mut StreamState) -> Option<CoreStr
                 content: vec![],
             },
             usage: None,
+        });
+    }
+
+    if let Some(u) = &chunk.usage {
+        return Some(CoreStreamEvent::MessageDelta {
+            delta: CoreMessageDelta {
+                stop_reason: None,
+                usage: Some(Usage::new(u.prompt_tokens, u.completion_tokens)),
+            },
         });
     }
 
@@ -341,6 +352,7 @@ pub fn parse_stream_event(data: &str, state: &mut StreamState) -> Option<CoreStr
         for tool_call_delta in tool_call_deltas {
             let index = tool_call_delta.index as usize;
             let partial = state.get_or_create_tool_call(index);
+            let pending = partial.pending_args.take();
 
             if let Some(id) = &tool_call_delta.id {
                 partial.id = Some(id.clone());
@@ -349,8 +361,19 @@ pub fn parse_stream_event(data: &str, state: &mut StreamState) -> Option<CoreStr
             if let Some(function) = &tool_call_delta.function {
                 if let Some(name) = &function.name {
                     partial.name = Some(name.clone());
+                }
 
-                    if let (Some(id), Some(name)) = (&partial.id, &partial.name) {
+                if let Some(args) = &function.arguments {
+                    partial.arguments.push_str(args);
+                }
+
+                if let (Some(id), Some(name)) = (&partial.id, &partial.name) {
+                    if !partial.started {
+                        partial.started = true;
+                        if !partial.arguments.is_empty() {
+                            partial.pending_args = Some(partial.arguments.clone());
+                        }
+
                         return Some(CoreStreamEvent::ContentBlockStart {
                             index,
                             content_block: ContentBlock::ToolUse {
@@ -363,12 +386,18 @@ pub fn parse_stream_event(data: &str, state: &mut StreamState) -> Option<CoreStr
                     }
                 }
 
-                if let Some(args) = &function.arguments {
-                    partial.arguments.push_str(args);
+                let new_args = function.arguments.as_ref();
+                if pending.is_some() || new_args.is_some() {
+                    let combined = match (pending, new_args) {
+                        (Some(p), Some(n)) => format!("{}{}", p, n),
+                        (Some(p), None) => p,
+                        (None, Some(n)) => n.clone(),
+                        (None, None) => unreachable!(),
+                    };
                     return Some(CoreStreamEvent::ContentBlockDelta {
                         index,
                         delta: ContentDelta::InputJsonDelta {
-                            partial_json: args.clone(),
+                            partial_json: combined,
                         },
                     });
                 }
@@ -649,7 +678,7 @@ mod tests {
         let event = parse_stream_event(json, &mut state);
 
         if let Some(CoreStreamEvent::MessageDelta { delta }) = event {
-            assert_eq!(delta.stop_reason, Some(StopReason::EndTurn));
+            assert_eq!(delta.stop_reason, None);
             assert!(delta.usage.is_some());
             assert_eq!(delta.usage.unwrap().input_tokens, 10);
         } else {

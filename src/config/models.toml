@@ -4,7 +4,7 @@ name = "MiniMax M2.1"
 provider = "openrouter"
 max_tokens = 65000
 default = false
-supports_tools = false
+supports_tools = true
 
 [[models]]
 id = "claude-opus-4-5"
