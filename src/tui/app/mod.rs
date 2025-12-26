@@ -169,9 +169,9 @@ impl TuiApp {
             AppEvent::Resize(_w, _h) => {}
             AppEvent::MouseScroll(delta) => {
                 if delta < 0 {
-                    self.state.scroll_up((-delta) as usize);
+                    self.state.scroll_up(delta.unsigned_abs().into());
                 } else {
-                    self.state.scroll_down(delta as usize);
+                    self.state.scroll_down(delta.unsigned_abs().into());
                 }
             }
             AppEvent::Tick => {
@@ -229,8 +229,8 @@ impl TuiApp {
                 self.state.add_file_diff(path, old_content, new_content);
             }
             AppEvent::ModelChanged { provider, model } => {
-                self.provider_name = provider.clone();
-                self.model_name = model.clone();
+                self.provider_name.clone_from(&provider);
+                self.model_name.clone_from(&model);
                 self.state
                     .add_system_message(format!("Switched to {provider}/{model}"));
 
