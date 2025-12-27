@@ -5,6 +5,7 @@ use grep_searcher::sinks::UTF8;
 use grep_searcher::{BinaryDetection, Searcher, SearcherBuilder};
 use schemars::JsonSchema;
 use serde::Deserialize;
+use std::fmt::Write;
 use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 
@@ -165,8 +166,8 @@ impl TypedTool for GrepTool {
             .build();
 
         let search_path = if let Some(path_str) = &input.path {
-            let path = validate_absolute_path(path_str, ToolType::Grep)?;
-            validate_path_exists(&path, ToolType::Grep)?;
+            let path = validate_absolute_path(path_str, &ToolType::Grep)?;
+            validate_path_exists(&path, &ToolType::Grep)?;
             path
         } else {
             std::env::current_dir()?
@@ -228,7 +229,9 @@ impl TypedTool for GrepTool {
             }
         }
 
-        let results = results.lock().unwrap();
+        let results = results
+            .lock()
+            .unwrap_or_else(std::sync::PoisonError::into_inner);
 
         if results.is_empty() {
             return Ok(format!(
@@ -238,39 +241,38 @@ impl TypedTool for GrepTool {
         }
 
         let mut output = String::new();
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "Found {} matches for \"{}\":\n\n",
             results.len(),
             input.pattern
-        ));
+        );
 
         for result in results.iter() {
-            output.push_str(&format!(
-                "{}:{}:",
-                result.path.display(),
-                result.line_number
-            ));
+            let _ = write!(output, "{}:{}:", result.path.display(), result.line_number);
 
             if context > 0 {
                 output.push('\n');
                 for line in &result.context_before {
-                    output.push_str(&format!("   {line}\n"));
+                    let _ = writeln!(output, "   {line}");
                 }
-                output.push_str(&format!(" > {}\n", result.line));
+                let _ = writeln!(output, " > {}", result.line);
                 for line in &result.context_after {
-                    output.push_str(&format!("   {line}\n"));
+                    let _ = writeln!(output, "   {line}");
                 }
             } else {
-                output.push_str(&format!(" {}\n", result.line));
+                let _ = writeln!(output, " {}", result.line);
             }
         }
 
-        output.push_str(&format!(
+        let _ = write!(
+            output,
             "\n[Showing {} of {} matches]",
             results.len(),
             results.len()
-        ));
-        output.push_str(&format!("\n[Pattern: {}]", input.pattern));
+        );
+        drop(results);
+        let _ = write!(output, "\n[Pattern: {}]", input.pattern);
         if input.respect_gitignore {
             output.push_str("\n[Respecting .gitignore]");
         }

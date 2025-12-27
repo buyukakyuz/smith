@@ -1,6 +1,7 @@
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use std::fmt::Write;
 
 use crate::core::error::Result;
 use crate::tools::ToolType;
@@ -62,12 +63,12 @@ impl TypedTool for ListDirTool {
     }
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
-        let path = validate_absolute_path(&input.path, ToolType::ListDir)?;
+        let path = validate_absolute_path(&input.path, &ToolType::ListDir)?;
 
         let depth = input.depth.min(LIST_MAX_DEPTH);
 
-        validate_path_exists(&path, ToolType::ListDir)?;
-        validate_is_dir(&path, ToolType::ListDir)?;
+        validate_path_exists(&path, &ToolType::ListDir)?;
+        validate_is_dir(&path, &ToolType::ListDir)?;
 
         let walker = walk_builder_with_gitignore(&path, input.respect_gitignore)
             .hidden(!input.include_hidden)
@@ -95,9 +96,8 @@ impl TypedTool for ListDirTool {
                 .map(|n| n.to_string_lossy().to_string())
                 .unwrap_or_default();
 
-            let metadata = match entry.metadata() {
-                Ok(m) => m,
-                Err(_) => continue,
+            let Ok(metadata) = entry.metadata() else {
+                continue;
             };
 
             let is_dir = metadata.is_dir();
@@ -152,25 +152,23 @@ impl TypedTool for ListDirTool {
         let dir_count = items.iter().filter(|(_, _, is_dir, _)| *is_dir).count();
 
         let mut output = String::new();
-        output.push_str(&format!("Directory: {}\n", path.display()));
-        output.push_str(&format!(
-            "Total: {file_count} files, {dir_count} directories\n\n"
-        ));
+        let _ = writeln!(output, "Directory: {}", path.display());
+        let _ = writeln!(
+            output,
+            "Total: {file_count} files, {dir_count} directories\n"
+        );
 
         for (name, size, _, _) in &items {
             if let Some(s) = size {
-                output.push_str(&format!("{} ({})\n", name, format_size(*s)));
+                let _ = writeln!(output, "{} ({})\n", name, format_size(*s));
             } else {
-                output.push_str(&format!("{name}\n"));
+                let _ = writeln!(output, "{name}\n");
             }
         }
 
-        output.push_str(&format!("\n[Sorted by: {}]", input.sort_by));
+        let _ = writeln!(output, "\n[Sorted by: {}]", input.sort_by);
         if depth > 0 {
-            output.push_str(&format!("\n[Depth: {depth}]"));
-        }
-        if input.respect_gitignore {
-            output.push_str("\n[Respecting .gitignore]");
+            let _ = writeln!(output, "\n[Depth: {depth}]");
         }
 
         Ok(output)

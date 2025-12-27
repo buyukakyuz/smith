@@ -50,10 +50,10 @@ impl TypedTool for UpdateFileTool {
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
         let start_time = Instant::now();
-        let path = validate_absolute_path(&input.path, ToolType::UpdateFile)?;
+        let path = validate_absolute_path(&input.path, &ToolType::UpdateFile)?;
 
-        validate_path_exists(&path, ToolType::UpdateFile)?;
-        validate_file_size(&path, ToolType::UpdateFile)?;
+        validate_path_exists(&path, &ToolType::UpdateFile)?;
+        validate_file_size(&path, &ToolType::UpdateFile)?;
 
         let old_content = std::fs::read_to_string(&path)?;
 

@@ -53,7 +53,7 @@ impl TypedTool for WriteFileTool {
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
         let start_time = Instant::now();
-        let path = validate_absolute_path(&input.path, ToolType::WriteFile)?;
+        let path = validate_absolute_path(&input.path, &ToolType::WriteFile)?;
 
         if input.content.len() > MAX_WRITE_SIZE {
             return Err(AgentError::InvalidToolInput {

@@ -62,8 +62,8 @@ impl TypedTool for GlobTool {
         let limit = input.limit.min(GLOB_MAX_LIMIT);
 
         let base_dir = if let Some(base) = &input.base_dir {
-            let base_path = validate_absolute_path(base, ToolType::Glob)?;
-            validate_path_exists(&base_path, ToolType::Glob)?;
+            let base_path = validate_absolute_path(base, &ToolType::Glob)?;
+            validate_path_exists(&base_path, &ToolType::Glob)?;
             base_path
         } else {
             std::env::current_dir()?

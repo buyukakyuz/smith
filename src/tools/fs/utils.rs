@@ -11,7 +11,7 @@ pub fn is_absolute_path(path: &str) -> bool {
     Path::new(path).is_absolute()
 }
 
-pub fn validate_absolute_path(path: &str, tool_type: ToolType) -> Result<PathBuf> {
+pub fn validate_absolute_path(path: &str, tool_type: &ToolType) -> Result<PathBuf> {
     if !is_absolute_path(path) {
         return Err(AgentError::InvalidToolInput {
             tool: tool_type.name().to_string(),
@@ -21,7 +21,7 @@ pub fn validate_absolute_path(path: &str, tool_type: ToolType) -> Result<PathBuf
     Ok(PathBuf::from(path))
 }
 
-pub fn validate_path_exists(path: &Path, tool_type: ToolType) -> Result<()> {
+pub fn validate_path_exists(path: &Path, tool_type: &ToolType) -> Result<()> {
     if !path.exists() {
         return Err(AgentError::InvalidToolInput {
             tool: tool_type.name().to_string(),
@@ -31,7 +31,7 @@ pub fn validate_path_exists(path: &Path, tool_type: ToolType) -> Result<()> {
     Ok(())
 }
 
-pub fn validate_is_file(path: &Path, tool_type: ToolType) -> Result<()> {
+pub fn validate_is_file(path: &Path, tool_type: &ToolType) -> Result<()> {
     if !path.is_file() {
         return Err(AgentError::InvalidToolInput {
             tool: tool_type.name().to_string(),
@@ -41,7 +41,7 @@ pub fn validate_is_file(path: &Path, tool_type: ToolType) -> Result<()> {
     Ok(())
 }
 
-pub fn validate_is_dir(path: &Path, tool_type: ToolType) -> Result<()> {
+pub fn validate_is_dir(path: &Path, tool_type: &ToolType) -> Result<()> {
     if !path.is_dir() {
         return Err(AgentError::InvalidToolInput {
             tool: tool_type.name().to_string(),
@@ -51,7 +51,7 @@ pub fn validate_is_dir(path: &Path, tool_type: ToolType) -> Result<()> {
     Ok(())
 }
 
-pub fn validate_file_size(path: &Path, tool_type: ToolType) -> Result<u64> {
+pub fn validate_file_size(path: &Path, tool_type: &ToolType) -> Result<u64> {
     let metadata = std::fs::metadata(path)?;
     let size = metadata.len();
     if size > MAX_FILE_SIZE {

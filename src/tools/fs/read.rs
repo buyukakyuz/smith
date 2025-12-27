@@ -1,13 +1,14 @@
+#![allow(clippy::unwrap_used)]
+use crate::core::error::{AgentError, Result};
+use crate::tools::ToolType;
+use crate::tools::TypedTool;
 use async_trait::async_trait;
 use content_inspector::ContentType;
 use schemars::JsonSchema;
 use serde::Deserialize;
+use std::fmt::Write;
 use std::fs::File;
 use std::io::Read;
-
-use crate::core::error::{AgentError, Result};
-use crate::tools::ToolType;
-use crate::tools::TypedTool;
 
 use super::constants::{
     READ_BINARY_CHECK_SIZE, READ_DEFAULT_LIMIT, READ_DEFAULT_OFFSET, READ_MAX_LIMIT,
@@ -62,13 +63,13 @@ impl TypedTool for ReadFileTool {
     }
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
-        let path = validate_absolute_path(&input.path, ToolType::ReadFile)?;
+        let path = validate_absolute_path(&input.path, &ToolType::ReadFile)?;
 
         let limit = input.limit.min(READ_MAX_LIMIT);
 
-        validate_path_exists(&path, ToolType::ReadFile)?;
-        validate_is_file(&path, ToolType::ReadFile)?;
-        let file_size = validate_file_size(&path, ToolType::ReadFile)?;
+        validate_path_exists(&path, &ToolType::ReadFile)?;
+        validate_is_file(&path, &ToolType::ReadFile)?;
+        let file_size = validate_file_size(&path, &ToolType::ReadFile)?;
 
         let mut file = File::open(&path)?;
         let mut buffer = vec![0u8; READ_BINARY_CHECK_SIZE.min(file_size as usize)];
@@ -118,13 +119,14 @@ impl TypedTool for ReadFileTool {
         let selected_lines = &all_lines[start_idx..end_idx];
 
         let mut output = String::new();
-        output.push_str(&format!("File: {}\n", path.display()));
-        output.push_str(&format!(
+        let _ = writeln!(output, "File: {}\n", path.display());
+        let _ = writeln!(
+            output,
             "Lines {}-{} of {} total\n\n",
             input.offset,
             start_idx + selected_lines.len(),
             total_lines
-        ));
+        );
 
         for (idx, line) in selected_lines.iter().enumerate() {
             let line_num = start_idx + idx + 1;
@@ -135,18 +137,18 @@ impl TypedTool for ReadFileTool {
                 (*line).to_string()
             };
 
-            output.push_str(&format!("L{line_num}: {formatted_line}\n"));
+            let _ = writeln!(output, "L{line_num}: {formatted_line}\n");
         }
-
         if selected_lines.len() < total_lines {
-            output.push_str(&format!(
+            let () = write!(
+                output,
                 "\n[Showing lines {}-{} of {} total]",
                 input.offset,
                 start_idx + selected_lines.len(),
                 total_lines
-            ));
+            )
+            .unwrap();
         }
-
         Ok(output)
     }
 }

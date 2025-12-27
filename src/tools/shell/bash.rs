@@ -18,6 +18,7 @@ use crate::tools::{ToolType, TypedTool};
 const DEFAULT_TIMEOUT_SECS: u64 = 120;
 const MAX_OUTPUT_SIZE: usize = 1024 * 1024;
 
+#[allow(clippy::expect_used)]
 static ANSI_REGEX: LazyLock<Regex> =
     LazyLock::new(|| Regex::new(r"\x1b\[[0-9;]*[a-zA-Z]").expect("valid regex"));
 
