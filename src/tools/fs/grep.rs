@@ -1,13 +1,12 @@
 use async_trait::async_trait;
-use globset::Glob;
+use globset::{Glob, GlobMatcher};
 use grep_regex::RegexMatcherBuilder;
 use grep_searcher::sinks::UTF8;
 use grep_searcher::{BinaryDetection, Searcher, SearcherBuilder};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::fmt::Write;
+use std::fmt::{self};
 use std::path::{Path, PathBuf};
-use std::sync::{Arc, Mutex};
 
 use crate::core::error::{AgentError, Result};
 use crate::tools::{ToolType, TypedTool};
@@ -20,22 +19,16 @@ use super::{validate_absolute_path, validate_path_exists, walk_builder_with_giti
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GrepInput {
     pub pattern: String,
-
     #[serde(default)]
     pub path: Option<String>,
-
     #[serde(default)]
     pub glob: Option<String>,
-
     #[serde(default)]
     pub ignore_case: bool,
-
     #[serde(default = "grep_default_limit")]
     pub limit: usize,
-
     #[serde(default)]
     pub context: usize,
-
     #[serde(default = "default_respect_gitignore")]
     #[schemars(default = "default_respect_gitignore")]
     pub respect_gitignore: bool,
@@ -44,8 +37,6 @@ pub struct GrepInput {
 const fn grep_default_limit() -> usize {
     GREP_DEFAULT_LIMIT
 }
-
-#[derive(Clone)]
 struct MatchResult {
     path: PathBuf,
     line_number: u64,
@@ -54,6 +45,158 @@ struct MatchResult {
     context_after: Vec<String>,
 }
 
+struct SearchConfig {
+    context: usize,
+    limit: usize,
+}
+
+struct MatchCollector {
+    matches: Vec<MatchResult>,
+    remaining: usize,
+}
+
+impl MatchCollector {
+    fn with_capacity(limit: usize) -> Self {
+        Self {
+            matches: Vec::with_capacity(limit.min(64)),
+            remaining: limit,
+        }
+    }
+
+    const fn is_full(&self) -> bool {
+        self.remaining == 0
+    }
+
+    fn push(&mut self, result: MatchResult) -> bool {
+        if self.remaining == 0 {
+            return false;
+        }
+        self.matches.push(result);
+        self.remaining -= 1;
+        self.remaining > 0
+    }
+
+    fn into_vec(self) -> Vec<MatchResult> {
+        self.matches
+    }
+}
+fn search_file(
+    path: &Path,
+    matcher: &grep_regex::RegexMatcher,
+    searcher: &mut Searcher,
+    config: &SearchConfig,
+    collector: &mut MatchCollector,
+) {
+    let lines: Option<Vec<String>> = if config.context > 0 {
+        std::fs::read_to_string(path)
+            .ok()
+            .map(|contents| contents.lines().map(String::from).collect())
+    } else {
+        None
+    };
+
+    let _ = searcher.search_path(
+        matcher,
+        path,
+        UTF8(|line_num, line| {
+            if collector.is_full() {
+                return Ok(false);
+            }
+
+            let (context_before, context_after) = lines
+                .as_ref()
+                .map(|lines| extract_context(lines, line_num as usize, config.context))
+                .unwrap_or_default();
+
+            let should_continue = collector.push(MatchResult {
+                path: path.to_path_buf(),
+                line_number: line_num,
+                line: line.trim_end().to_string(),
+                context_before,
+                context_after,
+            });
+
+            Ok(should_continue)
+        }),
+    );
+}
+
+fn extract_context(
+    lines: &[String],
+    line_num: usize,
+    context: usize,
+) -> (Vec<String>, Vec<String>) {
+    let idx = line_num.saturating_sub(1);
+
+    let before = (idx.saturating_sub(context)..idx)
+        .filter_map(|i| lines.get(i).cloned())
+        .collect();
+
+    let after = (idx + 1..=idx + context)
+        .filter_map(|i| lines.get(i).cloned())
+        .collect();
+
+    (before, after)
+}
+
+fn matches_glob(path: &Path, glob: Option<&GlobMatcher>) -> bool {
+    glob.is_none_or(|g| path.file_name().is_some_and(|name| g.is_match(name)))
+}
+
+struct SearchOutput<'a> {
+    pattern: &'a str,
+    results: &'a [MatchResult],
+    context: usize,
+    respect_gitignore: bool,
+}
+
+impl fmt::Display for SearchOutput<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.results.is_empty() {
+            return write!(f, "No matches found for pattern: \"{}\"", self.pattern);
+        }
+
+        writeln!(
+            f,
+            "Found {} matches for \"{}\":\n",
+            self.results.len(),
+            self.pattern
+        )?;
+
+        for result in self.results {
+            write!(f, "{}:{}:", result.path.display(), result.line_number)?;
+
+            if self.context > 0 {
+                writeln!(f)?;
+                for line in &result.context_before {
+                    writeln!(f, "   {line}")?;
+                }
+                writeln!(f, " > {}", result.line)?;
+                for line in &result.context_after {
+                    writeln!(f, "   {line}")?;
+                }
+            } else {
+                writeln!(f, " {}", result.line)?;
+            }
+        }
+
+        write!(
+            f,
+            "\n[Showing {} of {} matches]",
+            self.results.len(),
+            self.results.len()
+        )?;
+        write!(f, "\n[Pattern: {}]", self.pattern)?;
+
+        if self.respect_gitignore {
+            write!(f, "\n[Respecting .gitignore]")?;
+        }
+
+        Ok(())
+    }
+}
+
+#[derive(Default)]
 pub struct GrepTool;
 
 impl GrepTool {
@@ -62,77 +205,38 @@ impl GrepTool {
         Self
     }
 
-    fn search_file(
-        path: &Path,
-        matcher: &grep_regex::RegexMatcher,
-        searcher: &mut Searcher,
-        context: usize,
-        limit: usize,
-        results: &Arc<Mutex<Vec<MatchResult>>>,
-    ) -> bool {
-        let file_contents = std::fs::read_to_string(path).unwrap_or_default();
-        let lines: Vec<&str> = file_contents.lines().collect();
-
-        let search_result = searcher.search_path(
-            matcher,
-            path,
-            UTF8(|line_num, line| {
-                let mut results_guard = results.lock().unwrap();
-
-                if results_guard.len() >= limit {
-                    return Ok(false);
-                }
-
-                let line_idx = (line_num as usize).saturating_sub(1);
-
-                let context_before: Vec<String> = if context > 0 && line_idx > 0 {
-                    let start = line_idx.saturating_sub(context);
-                    lines[start..line_idx]
-                        .iter()
-                        .map(|s| (*s).to_string())
-                        .collect()
-                } else {
-                    Vec::new()
-                };
-
-                let context_after: Vec<String> = if context > 0 {
-                    let end = std::cmp::min(line_idx + 1 + context, lines.len());
-                    if line_idx + 1 < lines.len() {
-                        lines[line_idx + 1..end]
-                            .iter()
-                            .map(|s| (*s).to_string())
-                            .collect()
-                    } else {
-                        Vec::new()
-                    }
-                } else {
-                    Vec::new()
-                };
-
-                results_guard.push(MatchResult {
-                    path: path.to_path_buf(),
-                    line_number: line_num,
-                    line: line.trim_end().to_string(),
-                    context_before,
-                    context_after,
-                });
-
-                Ok(true)
-            }),
-        );
-
-        if search_result.is_err() {
-            return true;
-        }
-
-        let results_guard = results.lock().unwrap();
-        results_guard.len() < limit
+    fn build_matcher(pattern: &str, ignore_case: bool) -> Result<grep_regex::RegexMatcher> {
+        RegexMatcherBuilder::new()
+            .case_insensitive(ignore_case)
+            .build(pattern)
+            .map_err(|e| AgentError::InvalidToolInput {
+                tool: ToolType::Grep.name().to_string(),
+                reason: format!("Invalid regex pattern: {e}"),
+            })
     }
-}
 
-impl Default for GrepTool {
-    fn default() -> Self {
-        Self::new()
+    fn build_glob(pattern: Option<&str>) -> Result<Option<GlobMatcher>> {
+        pattern
+            .map(|p| {
+                Glob::new(p).map(|g| g.compile_matcher()).map_err(|e| {
+                    AgentError::InvalidToolInput {
+                        tool: ToolType::Grep.name().to_string(),
+                        reason: format!("Invalid glob pattern: {e}"),
+                    }
+                })
+            })
+            .transpose()
+    }
+
+    fn resolve_search_path(path: Option<&str>) -> Result<PathBuf> {
+        match path {
+            Some(path_str) => {
+                let path = validate_absolute_path(path_str, &ToolType::Grep)?;
+                validate_path_exists(&path, &ToolType::Grep)?;
+                Ok(path)
+            }
+            None => Ok(std::env::current_dir()?),
+        }
     }
 }
 
@@ -149,138 +253,59 @@ impl TypedTool for GrepTool {
     }
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
-        let limit = input.limit.min(GREP_MAX_LIMIT);
-        let context = input.context.min(GREP_MAX_CONTEXT);
+        let config = SearchConfig {
+            limit: input.limit.min(GREP_MAX_LIMIT),
+            context: input.context.min(GREP_MAX_CONTEXT),
+        };
 
-        let matcher = RegexMatcherBuilder::new()
-            .case_insensitive(input.ignore_case)
-            .build(&input.pattern)
-            .map_err(|e| AgentError::InvalidToolInput {
-                tool: ToolType::Grep.name().to_string(),
-                reason: format!("Invalid regex pattern: {e}"),
-            })?;
+        let matcher = Self::build_matcher(&input.pattern, input.ignore_case)?;
+        let glob_matcher = Self::build_glob(input.glob.as_deref())?;
+        let search_path = Self::resolve_search_path(input.path.as_deref())?;
 
         let mut searcher = SearcherBuilder::new()
             .binary_detection(BinaryDetection::quit(0x00))
             .line_number(true)
             .build();
 
-        let search_path = if let Some(path_str) = &input.path {
-            let path = validate_absolute_path(path_str, &ToolType::Grep)?;
-            validate_path_exists(&path, &ToolType::Grep)?;
-            path
-        } else {
-            std::env::current_dir()?
-        };
-
-        let glob_matcher = if let Some(glob_pattern) = &input.glob {
-            Some(
-                Glob::new(glob_pattern)
-                    .map_err(|e| AgentError::InvalidToolInput {
-                        tool: ToolType::Grep.name().to_string(),
-                        reason: format!("Invalid glob pattern: {e}"),
-                    })?
-                    .compile_matcher(),
-            )
-        } else {
-            None
-        };
-
-        let results: Arc<Mutex<Vec<MatchResult>>> = Arc::new(Mutex::new(Vec::new()));
+        let mut collector = MatchCollector::with_capacity(config.limit);
 
         if search_path.is_file() {
-            Self::search_file(
+            let () = search_file(
                 &search_path,
                 &matcher,
                 &mut searcher,
-                context,
-                limit,
-                &results,
+                &config,
+                &mut collector,
             );
         } else {
             let walker = walk_builder_with_gitignore(&search_path, input.respect_gitignore).build();
 
             for entry in walker.flatten() {
-                let entry_path = entry.path();
+                let path = entry.path();
 
-                if entry_path.is_dir() {
+                if path.is_dir() || !matches_glob(path, glob_matcher.as_ref()) {
                     continue;
                 }
 
-                if let Some(ref glob) = glob_matcher
-                    && let Some(file_name) = entry_path.file_name()
-                    && !glob.is_match(file_name)
-                {
-                    continue;
-                }
+                let () = search_file(path, &matcher, &mut searcher, &config, &mut collector);
 
-                let should_continue = Self::search_file(
-                    entry_path,
-                    &matcher,
-                    &mut searcher,
-                    context,
-                    limit,
-                    &results,
-                );
-
-                if !should_continue {
+                if collector.is_full() {
                     break;
                 }
             }
         }
 
-        let results = results
-            .lock()
-            .unwrap_or_else(std::sync::PoisonError::into_inner);
+        let results = collector.into_vec();
+        let output = SearchOutput {
+            pattern: &input.pattern,
+            results: &results,
+            context: config.context,
+            respect_gitignore: input.respect_gitignore,
+        };
 
-        if results.is_empty() {
-            return Ok(format!(
-                "No matches found for pattern: \"{}\"",
-                input.pattern
-            ));
-        }
-
-        let mut output = String::new();
-        let _ = write!(
-            output,
-            "Found {} matches for \"{}\":\n\n",
-            results.len(),
-            input.pattern
-        );
-
-        for result in results.iter() {
-            let _ = write!(output, "{}:{}:", result.path.display(), result.line_number);
-
-            if context > 0 {
-                output.push('\n');
-                for line in &result.context_before {
-                    let _ = writeln!(output, "   {line}");
-                }
-                let _ = writeln!(output, " > {}", result.line);
-                for line in &result.context_after {
-                    let _ = writeln!(output, "   {line}");
-                }
-            } else {
-                let _ = writeln!(output, " {}", result.line);
-            }
-        }
-
-        let _ = write!(
-            output,
-            "\n[Showing {} of {} matches]",
-            results.len(),
-            results.len()
-        );
-        drop(results);
-        let _ = write!(output, "\n[Pattern: {}]", input.pattern);
-        if input.respect_gitignore {
-            output.push_str("\n[Respecting .gitignore]");
-        }
-
-        Ok(output)
+        Ok(output.to_string())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

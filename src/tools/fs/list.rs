@@ -1,7 +1,9 @@
 use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::fmt::Write;
+use std::fmt::{self, Display};
+use std::path::{Path, PathBuf};
+use std::time::SystemTime;
 
 use crate::core::error::Result;
 use crate::tools::ToolType;
@@ -13,40 +15,201 @@ use super::{
     validate_absolute_path, validate_is_dir, validate_path_exists, walk_builder_with_gitignore,
 };
 
+#[derive(Debug, Clone, Copy, Default, Deserialize, JsonSchema)]
+#[serde(rename_all = "snake_case")]
+pub enum SortBy {
+    #[default]
+    Name,
+    Modified,
+    Size,
+}
+
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ListDirInput {
     pub path: String,
-
     #[serde(default)]
     pub include_hidden: bool,
-
     #[serde(default)]
     pub depth: usize,
-
-    #[serde(default = "default_sort")]
-    pub sort_by: String,
-
+    #[serde(default)]
+    pub sort_by: SortBy,
     #[serde(default = "default_respect_gitignore")]
     #[schemars(default = "default_respect_gitignore")]
     pub respect_gitignore: bool,
 }
 
-fn default_sort() -> String {
-    "name".to_string()
+#[derive(Debug)]
+struct DirEntry {
+    name: String,
+    depth: usize,
+    kind: EntryKind,
+    modified: SystemTime,
 }
 
+#[derive(Debug)]
+enum EntryKind {
+    Directory,
+    File { size: u64, executable: bool },
+}
+
+impl DirEntry {
+    const fn is_dir(&self) -> bool {
+        matches!(self.kind, EntryKind::Directory)
+    }
+
+    const fn size(&self) -> Option<u64> {
+        match self.kind {
+            EntryKind::File { size, .. } => Some(size),
+            EntryKind::Directory => None,
+        }
+    }
+
+    fn modified_timestamp(&self) -> u64 {
+        self.modified
+            .duration_since(SystemTime::UNIX_EPOCH)
+            .map_or(0, |d| d.as_secs())
+    }
+}
+
+impl DirEntry {
+    fn from_walker_entry(entry: &ignore::DirEntry, base: &Path) -> Option<Self> {
+        let path = entry.path();
+        let metadata = entry.metadata().ok()?;
+
+        let rel_path = path.strip_prefix(base).unwrap_or(path);
+        let depth = rel_path.components().count().saturating_sub(1);
+
+        let name = path.file_name()?.to_string_lossy().into_owned();
+
+        let kind = if metadata.is_dir() {
+            EntryKind::Directory
+        } else {
+            EntryKind::File {
+                size: metadata.len(),
+                executable: is_executable(&metadata),
+            }
+        };
+
+        let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
+
+        Some(Self {
+            name,
+            depth,
+            kind,
+            modified,
+        })
+    }
+}
+
+#[cfg(unix)]
+fn is_executable(metadata: &std::fs::Metadata) -> bool {
+    use std::os::unix::fs::PermissionsExt;
+    metadata.permissions().mode() & 0o111 != 0
+}
+
+#[cfg(not(unix))]
+fn is_executable(_metadata: &std::fs::Metadata) -> bool {
+    false
+}
+fn collect_entries(
+    base: &Path,
+    include_hidden: bool,
+    depth: usize,
+    respect_gitignore: bool,
+) -> Vec<DirEntry> {
+    walk_builder_with_gitignore(base, respect_gitignore)
+        .hidden(!include_hidden)
+        .max_depth(Some(depth + 1))
+        .build()
+        .flatten()
+        .filter(|e| e.path() != base)
+        .filter(|e| !is_inside_git_dir(e.path()))
+        .filter_map(|e| DirEntry::from_walker_entry(&e, base))
+        .collect()
+}
+
+fn is_inside_git_dir(path: &Path) -> bool {
+    path.components().any(|c| c.as_os_str() == ".git")
+}
+
+fn sort_entries(entries: &mut [DirEntry], sort_by: SortBy) {
+    match sort_by {
+        SortBy::Name => entries.sort_by(|a, b| a.name.cmp(&b.name)),
+        SortBy::Modified => {
+            entries.sort_by_key(|e| std::cmp::Reverse(e.modified_timestamp()));
+        }
+        SortBy::Size => {
+            entries.sort_by_key(|e| std::cmp::Reverse(e.size().unwrap_or(0)));
+        }
+    }
+}
+
+struct DirOutput<'a> {
+    path: &'a Path,
+    entries: &'a [DirEntry],
+    sort_by: SortBy,
+    depth: usize,
+}
+
+impl Display for DirOutput<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "Directory: {}", self.path.display())?;
+
+        if self.entries.is_empty() {
+            return write!(f, "\nDirectory is empty");
+        }
+
+        let (files, dirs) = self.entries.iter().fold((0, 0), |(files, dirs), e| {
+            if e.is_dir() {
+                (files, dirs + 1)
+            } else {
+                (files + 1, dirs)
+            }
+        });
+
+        writeln!(f, "Total: {files} files, {dirs} directories\n")?;
+
+        for entry in self.entries {
+            let indent = "  ".repeat(entry.depth);
+
+            match &entry.kind {
+                EntryKind::Directory => {
+                    writeln!(f, "{indent}{}/", entry.name)?;
+                }
+                EntryKind::File { size, executable } => {
+                    let suffix = if *executable { "*" } else { "" };
+                    writeln!(f, "{indent}{}{suffix} ({})", entry.name, format_size(*size))?;
+                }
+            }
+        }
+
+        write!(f, "\n[Sorted by: {}]", self.sort_by)?;
+
+        if self.depth > 0 {
+            write!(f, "\n[Depth: {}]", self.depth)?;
+        }
+
+        Ok(())
+    }
+}
+
+impl Display for SortBy {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        match self {
+            Self::Name => write!(f, "name"),
+            Self::Modified => write!(f, "modified"),
+            Self::Size => write!(f, "size"),
+        }
+    }
+}
+
+#[derive(Default)]
 pub struct ListDirTool;
 
 impl ListDirTool {
     #[must_use]
     pub const fn new() -> Self {
         Self
-    }
-}
-
-impl Default for ListDirTool {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -64,114 +227,23 @@ impl TypedTool for ListDirTool {
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
         let path = validate_absolute_path(&input.path, &ToolType::ListDir)?;
-
-        let depth = input.depth.min(LIST_MAX_DEPTH);
-
         validate_path_exists(&path, &ToolType::ListDir)?;
         validate_is_dir(&path, &ToolType::ListDir)?;
 
-        let walker = walk_builder_with_gitignore(&path, input.respect_gitignore)
-            .hidden(!input.include_hidden)
-            .max_depth(Some(depth + 1))
-            .build();
+        let depth = input.depth.min(LIST_MAX_DEPTH);
 
-        let mut items: Vec<(String, Option<u64>, bool, u64)> = Vec::new();
+        let mut entries =
+            collect_entries(&path, input.include_hidden, depth, input.respect_gitignore);
+        sort_entries(&mut entries, input.sort_by);
 
-        for entry in walker.flatten() {
-            let entry_path = entry.path();
+        let output = DirOutput {
+            path: &path,
+            entries: &entries,
+            sort_by: input.sort_by,
+            depth,
+        };
 
-            if entry_path == path {
-                continue;
-            }
-
-            if entry_path.components().any(|c| c.as_os_str() == ".git") {
-                continue;
-            }
-
-            let rel_path = entry_path.strip_prefix(&path).unwrap_or(entry_path);
-            let indent = rel_path.components().count().saturating_sub(1);
-
-            let file_name = entry_path
-                .file_name()
-                .map(|n| n.to_string_lossy().to_string())
-                .unwrap_or_default();
-
-            let Ok(metadata) = entry.metadata() else {
-                continue;
-            };
-
-            let is_dir = metadata.is_dir();
-            let size = if is_dir { None } else { Some(metadata.len()) };
-            let modified = metadata
-                .modified()
-                .ok()
-                .and_then(|t| t.duration_since(std::time::UNIX_EPOCH).ok())
-                .map_or(0, |d| d.as_secs());
-
-            let indent_str = "  ".repeat(indent);
-            let entry_str = if is_dir {
-                format!("{indent_str}{file_name}/")
-            } else {
-                #[cfg(unix)]
-                {
-                    use std::os::unix::fs::PermissionsExt;
-                    let mode = metadata.permissions().mode();
-                    if mode & 0o111 != 0 {
-                        format!("{indent_str}{file_name}*")
-                    } else {
-                        format!("{indent_str}{file_name}")
-                    }
-                }
-                #[cfg(not(unix))]
-                {
-                    format!("{indent_str}{file_name}")
-                }
-            };
-
-            items.push((entry_str, size, is_dir, modified));
-        }
-
-        if items.is_empty() {
-            return Ok(format!(
-                "Directory: {}\n\nDirectory is empty",
-                path.display()
-            ));
-        }
-
-        match input.sort_by.as_str() {
-            "modified" => items.sort_by(|a, b| b.3.cmp(&a.3)),
-            "size" => items.sort_by(|a, b| {
-                let size_a = a.1.unwrap_or(0);
-                let size_b = b.1.unwrap_or(0);
-                size_b.cmp(&size_a)
-            }),
-            _ => items.sort_by(|a, b| a.0.cmp(&b.0)),
-        }
-
-        let file_count = items.iter().filter(|(_, _, is_dir, _)| !is_dir).count();
-        let dir_count = items.iter().filter(|(_, _, is_dir, _)| *is_dir).count();
-
-        let mut output = String::new();
-        let _ = writeln!(output, "Directory: {}", path.display());
-        let _ = writeln!(
-            output,
-            "Total: {file_count} files, {dir_count} directories\n"
-        );
-
-        for (name, size, _, _) in &items {
-            if let Some(s) = size {
-                let _ = writeln!(output, "{} ({})\n", name, format_size(*s));
-            } else {
-                let _ = writeln!(output, "{name}\n");
-            }
-        }
-
-        let _ = writeln!(output, "\n[Sorted by: {}]", input.sort_by);
-        if depth > 0 {
-            let _ = writeln!(output, "\n[Depth: {depth}]");
-        }
-
-        Ok(output)
+        Ok(output.to_string())
     }
 }
 
@@ -200,7 +272,7 @@ mod tests {
             path: dir_path.to_str().unwrap().to_string(),
             include_hidden: false,
             depth: 0,
-            sort_by: "name".to_string(),
+            sort_by: SortBy::Name,
             respect_gitignore: false,
         };
 
@@ -224,7 +296,7 @@ mod tests {
             path: dir_path.to_str().unwrap().to_string(),
             include_hidden: false,
             depth: 0,
-            sort_by: "name".to_string(),
+            sort_by: SortBy::Name,
             respect_gitignore: false,
         };
         let result = tool.execute_typed(input).await.unwrap();
@@ -235,7 +307,7 @@ mod tests {
             path: dir_path.to_str().unwrap().to_string(),
             include_hidden: true,
             depth: 0,
-            sort_by: "name".to_string(),
+            sort_by: SortBy::Name,
             respect_gitignore: false,
         };
         let result = tool.execute_typed(input).await.unwrap();
@@ -257,7 +329,7 @@ mod tests {
             path: dir_path.to_str().unwrap().to_string(),
             include_hidden: false,
             depth: 1,
-            sort_by: "name".to_string(),
+            sort_by: SortBy::Name,
             respect_gitignore: false,
         };
 
@@ -274,7 +346,7 @@ mod tests {
             path: "/nonexistent/directory".to_string(),
             include_hidden: false,
             depth: 0,
-            sort_by: "name".to_string(),
+            sort_by: SortBy::Name,
             respect_gitignore: false,
         };
 
@@ -292,7 +364,7 @@ mod tests {
             path: dir_path.to_str().unwrap().to_string(),
             include_hidden: false,
             depth: 0,
-            sort_by: "name".to_string(),
+            sort_by: SortBy::Name,
             respect_gitignore: false,
         };
 
@@ -318,7 +390,7 @@ mod tests {
             path: dir_path.to_str().unwrap().to_string(),
             include_hidden: false,
             depth: 0,
-            sort_by: "name".to_string(),
+            sort_by: SortBy::Name,
             respect_gitignore: true,
         };
         let result = tool.execute_typed(input).await.unwrap();
@@ -329,7 +401,7 @@ mod tests {
             path: dir_path.to_str().unwrap().to_string(),
             include_hidden: false,
             depth: 0,
-            sort_by: "name".to_string(),
+            sort_by: SortBy::Name,
             respect_gitignore: false,
         };
         let result = tool.execute_typed(input).await.unwrap();

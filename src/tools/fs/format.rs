@@ -1,8 +1,9 @@
 use std::time::SystemTime;
 
 pub fn format_time_ago(modified: SystemTime) -> String {
-    match modified.elapsed() {
-        Ok(elapsed) => {
+    modified.elapsed().map_or_else(
+        |_| "unknown".to_string(),
+        |elapsed| {
             let secs = elapsed.as_secs();
             if secs < 60 {
                 format!("{secs}s ago")
@@ -13,11 +14,11 @@ pub fn format_time_ago(modified: SystemTime) -> String {
             } else {
                 format!("{}d ago", secs / 86400)
             }
-        }
-        Err(_) => "unknown".to_string(),
-    }
+        },
+    )
 }
 
+#[allow(clippy::cast_precision_loss)]
 pub fn format_size(size: u64) -> String {
     const KB: u64 = 1024;
     const MB: u64 = KB * 1024;

@@ -1,8 +1,9 @@
 use async_trait::async_trait;
-use globset::{Glob, GlobSetBuilder};
+use globset::{Glob, GlobMatcher};
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::fmt::{self, Display};
+use std::path::{Path, PathBuf};
 use std::time::SystemTime;
 
 use crate::core::error::{AgentError, Result};
@@ -15,13 +16,10 @@ use super::{validate_absolute_path, validate_path_exists, walk_builder_with_giti
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct GlobInput {
     pub pattern: String,
-
     #[serde(default)]
     pub base_dir: Option<String>,
-
     #[serde(default = "glob_default_limit")]
     pub limit: usize,
-
     #[serde(default = "default_respect_gitignore")]
     #[schemars(default = "default_respect_gitignore")]
     pub respect_gitignore: bool,
@@ -30,7 +28,82 @@ pub struct GlobInput {
 const fn glob_default_limit() -> usize {
     GLOB_DEFAULT_LIMIT
 }
+struct FileMatch {
+    path: PathBuf,
+    modified: SystemTime,
+}
 
+impl FileMatch {
+    fn relative_path<'a>(&'a self, base: &Path) -> &'a Path {
+        self.path.strip_prefix(base).unwrap_or(&self.path)
+    }
+}
+
+fn matches_glob(path: &Path, base_dir: &Path, matcher: &GlobMatcher) -> bool {
+    let relative = path.strip_prefix(base_dir).unwrap_or(path);
+    matcher.is_match(relative) || path.file_name().is_some_and(|name| matcher.is_match(name))
+}
+
+fn collect_matches(
+    base_dir: &Path,
+    matcher: &GlobMatcher,
+    respect_gitignore: bool,
+) -> Vec<FileMatch> {
+    walk_builder_with_gitignore(base_dir, respect_gitignore)
+        .build()
+        .flatten()
+        .filter(|entry| !entry.path().is_dir())
+        .filter(|entry| matches_glob(entry.path(), base_dir, matcher))
+        .filter_map(|entry| {
+            entry.metadata().ok().map(|meta| FileMatch {
+                path: entry.path().to_path_buf(),
+                modified: meta.modified().unwrap_or(SystemTime::UNIX_EPOCH),
+            })
+        })
+        .collect()
+}
+struct GlobOutput<'a> {
+    pattern: &'a str,
+    results: &'a [FileMatch],
+    base_dir: &'a Path,
+    total_found: usize,
+    respect_gitignore: bool,
+}
+
+impl Display for GlobOutput<'_> {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        if self.results.is_empty() {
+            return write!(f, "No files found matching pattern: {}", self.pattern);
+        }
+
+        writeln!(
+            f,
+            "Found {} files matching \"{}\":\n",
+            self.total_found, self.pattern
+        )?;
+
+        for file in self.results {
+            let relative = file.relative_path(self.base_dir).display();
+            let modified = format_time_ago(file.modified);
+            writeln!(f, "{relative} (modified {modified})")?;
+        }
+
+        write!(
+            f,
+            "\n[Showing {} of {} results]",
+            self.results.len(),
+            self.total_found
+        )?;
+        write!(f, "\n[Pattern: {}]", self.pattern)?;
+
+        if self.respect_gitignore {
+            write!(f, "\n[Respecting .gitignore]")?;
+        }
+
+        Ok(())
+    }
+}
+#[derive(Default)]
 pub struct GlobTool;
 
 impl GlobTool {
@@ -38,11 +111,25 @@ impl GlobTool {
     pub const fn new() -> Self {
         Self
     }
-}
 
-impl Default for GlobTool {
-    fn default() -> Self {
-        Self::new()
+    fn build_matcher(pattern: &str) -> Result<GlobMatcher> {
+        Glob::new(pattern)
+            .map(|g| g.compile_matcher())
+            .map_err(|e| AgentError::InvalidToolInput {
+                tool: ToolType::Glob.name().to_string(),
+                reason: format!("Invalid glob pattern: {e}"),
+            })
+    }
+
+    fn resolve_base_dir(base_dir: Option<&str>) -> Result<PathBuf> {
+        match base_dir {
+            Some(base) => {
+                let path = validate_absolute_path(base, &ToolType::Glob)?;
+                validate_path_exists(&path, &ToolType::Glob)?;
+                Ok(path)
+            }
+            None => Ok(std::env::current_dir()?),
+        }
     }
 }
 
@@ -60,104 +147,26 @@ impl TypedTool for GlobTool {
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
         let limit = input.limit.min(GLOB_MAX_LIMIT);
+        let matcher = Self::build_matcher(&input.pattern)?;
+        let base_dir = Self::resolve_base_dir(input.base_dir.as_deref())?;
 
-        let base_dir = if let Some(base) = &input.base_dir {
-            let base_path = validate_absolute_path(base, &ToolType::Glob)?;
-            validate_path_exists(&base_path, &ToolType::Glob)?;
-            base_path
-        } else {
-            std::env::current_dir()?
+        let mut results = collect_matches(&base_dir, &matcher, input.respect_gitignore);
+        let total_found = results.len();
+
+        results.sort_unstable_by(|a, b| b.modified.cmp(&a.modified));
+        results.truncate(limit);
+
+        let output = GlobOutput {
+            pattern: &input.pattern,
+            results: &results,
+            base_dir: &base_dir,
+            total_found,
+            respect_gitignore: input.respect_gitignore,
         };
 
-        let glob = Glob::new(&input.pattern).map_err(|e| AgentError::InvalidToolInput {
-            tool: ToolType::Glob.name().to_string(),
-            reason: format!("Invalid glob pattern: {e}"),
-        })?;
-
-        let mut builder = GlobSetBuilder::new();
-        builder.add(glob);
-        let glob_set = builder.build().map_err(|e| AgentError::InvalidToolInput {
-            tool: ToolType::Glob.name().to_string(),
-            reason: format!("Failed to build glob set: {e}"),
-        })?;
-
-        let walker = walk_builder_with_gitignore(&base_dir, input.respect_gitignore).build();
-
-        let mut results: Vec<(PathBuf, SystemTime)> = Vec::new();
-
-        for entry in walker.flatten() {
-            let entry_path = entry.path();
-
-            if entry_path.is_dir() {
-                continue;
-            }
-
-            let rel_path = entry_path.strip_prefix(&base_dir).unwrap_or(entry_path);
-
-            let matches = glob_set.is_match(rel_path)
-                || entry_path
-                    .file_name()
-                    .is_some_and(|name| glob_set.is_match(name));
-
-            if !matches {
-                continue;
-            }
-
-            if let Ok(metadata) = entry.metadata() {
-                let modified = metadata.modified().unwrap_or(SystemTime::UNIX_EPOCH);
-                results.push((entry_path.to_path_buf(), modified));
-            }
-
-            if results.len() >= limit {
-                break;
-            }
-        }
-
-        results.sort_by(|a, b| b.1.cmp(&a.1));
-
-        if results.is_empty() {
-            return Ok(format!(
-                "No files found matching pattern: {}",
-                input.pattern
-            ));
-        }
-
-        let mut output = String::new();
-        output.push_str(&format!(
-            "Found {} files matching \"{}\":\n\n",
-            results.len(),
-            input.pattern
-        ));
-
-        for (path, modified) in &results {
-            let relative_path = path
-                .strip_prefix(&base_dir)
-                .unwrap_or(path)
-                .to_string_lossy()
-                .to_string();
-
-            output.push_str(&format!(
-                "{} (modified {})\n",
-                relative_path,
-                format_time_ago(*modified)
-            ));
-        }
-
-        let total_matches = results.len();
-        output.push_str(&format!(
-            "\n[Showing {} of {} results]",
-            total_matches.min(limit),
-            total_matches
-        ));
-        output.push_str(&format!("\n[Pattern: {}]", input.pattern));
-        if input.respect_gitignore {
-            output.push_str("\n[Respecting .gitignore]");
-        }
-
-        Ok(output)
+        Ok(output.to_string())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

@@ -1,28 +1,26 @@
-#![allow(clippy::unwrap_used)]
-use crate::core::error::{AgentError, Result};
-use crate::tools::ToolType;
-use crate::tools::TypedTool;
 use async_trait::async_trait;
 use content_inspector::ContentType;
 use schemars::JsonSchema;
 use serde::Deserialize;
-use std::fmt::Write;
+use std::fmt::{self, Display};
 use std::fs::File;
-use std::io::Read;
+use std::io::{BufRead, BufReader, Read};
+use std::path::{Path, PathBuf};
+
+use crate::core::error::{AgentError, Result};
+use crate::tools::ToolType;
+use crate::tools::TypedTool;
 
 use super::constants::{
     READ_BINARY_CHECK_SIZE, READ_DEFAULT_LIMIT, READ_DEFAULT_OFFSET, READ_MAX_LIMIT,
     READ_MAX_LINE_LENGTH,
 };
 use super::{validate_absolute_path, validate_file_size, validate_is_file, validate_path_exists};
-
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct ReadFileInput {
     pub path: String,
-
     #[serde(default = "read_default_offset")]
     pub offset: usize,
-
     #[serde(default = "read_default_limit")]
     pub limit: usize,
 }
@@ -34,19 +32,150 @@ const fn read_default_offset() -> usize {
 const fn read_default_limit() -> usize {
     READ_DEFAULT_LIMIT
 }
+struct Line {
+    number: usize,
+    content: String,
+    truncated: bool,
+}
 
+struct FileContent {
+    path: PathBuf,
+    lines: Vec<Line>,
+    total_lines: usize,
+    start_line: usize,
+}
+
+fn check_binary(file: &mut File, file_size: u64) -> std::io::Result<bool> {
+    let check_size = READ_BINARY_CHECK_SIZE.min(file_size as usize);
+    let mut buffer = vec![0u8; check_size];
+    let bytes_read = file.read(&mut buffer)?;
+    buffer.truncate(bytes_read);
+    Ok(content_inspector::inspect(&buffer) == ContentType::BINARY)
+}
+
+fn read_lines(path: &Path, start_line: usize, limit: usize) -> std::io::Result<(Vec<Line>, usize)> {
+    let file = File::open(path)?;
+    let reader = BufReader::new(file);
+
+    let mut total_lines = 0;
+    let mut lines = Vec::with_capacity(limit.min(1000));
+
+    let skip_count = start_line.saturating_sub(1);
+
+    for (idx, line_result) in reader.lines().enumerate() {
+        total_lines = idx + 1;
+
+        if idx < skip_count {
+            continue;
+        }
+
+        if lines.len() >= limit {
+            continue;
+        }
+
+        let raw_line = line_result?;
+        let (content, truncated) = truncate_line(&raw_line);
+
+        lines.push(Line {
+            number: idx + 1,
+            content,
+            truncated,
+        });
+    }
+
+    Ok((lines, total_lines))
+}
+
+fn truncate_line(line: &str) -> (String, bool) {
+    if line.len() > READ_MAX_LINE_LENGTH {
+        (
+            format!("{}... [truncated]", &line[..READ_MAX_LINE_LENGTH]),
+            true,
+        )
+    } else {
+        (line.to_string(), false)
+    }
+}
+
+fn read_file_content(path: &Path, offset: usize, limit: usize) -> Result<FileContent> {
+    let mut file = File::open(path)?;
+    let file_size = validate_file_size(path, &ToolType::ReadFile)?;
+
+    if check_binary(&mut file, file_size)? {
+        return Err(AgentError::InvalidToolInput {
+            tool: ToolType::ReadFile.name().to_string(),
+            reason: format!(
+                "File appears to be binary: {}. Use a hex viewer or appropriate tool instead.",
+                path.display()
+            ),
+        });
+    }
+
+    let start_line = offset.max(1);
+
+    let (lines, total_lines) = read_lines(path, start_line, limit).map_err(|e| {
+        if e.kind() == std::io::ErrorKind::InvalidData {
+            AgentError::Io(std::io::Error::new(
+                std::io::ErrorKind::InvalidData,
+                format!("File is not valid UTF-8: {}", path.display()),
+            ))
+        } else {
+            AgentError::Io(e)
+        }
+    })?;
+
+    Ok(FileContent {
+        path: path.to_path_buf(),
+        lines,
+        total_lines,
+        start_line,
+    })
+}
+impl Display for FileContent {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        writeln!(f, "File: {}", self.path.display())?;
+
+        if self.lines.is_empty() {
+            if self.start_line > self.total_lines {
+                return write!(
+                    f,
+                    "\nOffset {} is beyond end of file ({} lines total)",
+                    self.start_line, self.total_lines
+                );
+            }
+            return write!(f, "\nFile is empty");
+        }
+
+        let end_line = self.lines.last().map_or(self.start_line, |l| l.number);
+
+        writeln!(
+            f,
+            "Lines {}-{} of {} total\n",
+            self.start_line, end_line, self.total_lines
+        )?;
+
+        for line in &self.lines {
+            writeln!(f, "L{}: {}", line.number, line.content)?;
+        }
+
+        if self.lines.len() < self.total_lines {
+            write!(
+                f,
+                "\n[Showing lines {}-{} of {} total]",
+                self.start_line, end_line, self.total_lines
+            )?;
+        }
+
+        Ok(())
+    }
+}
+#[derive(Default)]
 pub struct ReadFileTool;
 
 impl ReadFileTool {
     #[must_use]
     pub const fn new() -> Self {
         Self
-    }
-}
-
-impl Default for ReadFileTool {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -64,95 +193,15 @@ impl TypedTool for ReadFileTool {
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
         let path = validate_absolute_path(&input.path, &ToolType::ReadFile)?;
-
-        let limit = input.limit.min(READ_MAX_LIMIT);
-
         validate_path_exists(&path, &ToolType::ReadFile)?;
         validate_is_file(&path, &ToolType::ReadFile)?;
-        let file_size = validate_file_size(&path, &ToolType::ReadFile)?;
 
-        let mut file = File::open(&path)?;
-        let mut buffer = vec![0u8; READ_BINARY_CHECK_SIZE.min(file_size as usize)];
-        let bytes_read = file.read(&mut buffer)?;
-        buffer.truncate(bytes_read);
+        let limit = input.limit.min(READ_MAX_LIMIT);
+        let content = read_file_content(&path, input.offset, limit)?;
 
-        if content_inspector::inspect(&buffer) == ContentType::BINARY {
-            return Err(AgentError::InvalidToolInput {
-                tool: ToolType::ReadFile.name().to_string(),
-                reason: format!(
-                    "File appears to be binary: {}. Use a hex viewer or appropriate tool instead.",
-                    path.display()
-                ),
-            });
-        }
-
-        let contents = std::fs::read_to_string(&path).map_err(|e| {
-            if e.kind() == std::io::ErrorKind::InvalidData {
-                AgentError::Io(std::io::Error::new(
-                    std::io::ErrorKind::InvalidData,
-                    format!("File is not valid UTF-8: {}", path.display()),
-                ))
-            } else {
-                AgentError::Io(e)
-            }
-        })?;
-
-        let all_lines: Vec<&str> = contents.lines().collect();
-        let total_lines = all_lines.len();
-
-        let start_idx = if input.offset > 0 {
-            input.offset.saturating_sub(1)
-        } else {
-            0
-        };
-
-        if start_idx >= total_lines {
-            return Ok(format!(
-                "File: {}\n\nOffset {} is beyond end of file ({} lines total)",
-                path.display(),
-                input.offset,
-                total_lines
-            ));
-        }
-
-        let end_idx = std::cmp::min(start_idx + limit, total_lines);
-        let selected_lines = &all_lines[start_idx..end_idx];
-
-        let mut output = String::new();
-        let _ = writeln!(output, "File: {}\n", path.display());
-        let _ = writeln!(
-            output,
-            "Lines {}-{} of {} total\n\n",
-            input.offset,
-            start_idx + selected_lines.len(),
-            total_lines
-        );
-
-        for (idx, line) in selected_lines.iter().enumerate() {
-            let line_num = start_idx + idx + 1;
-
-            let formatted_line = if line.len() > READ_MAX_LINE_LENGTH {
-                format!("{}... [truncated]", &line[..READ_MAX_LINE_LENGTH])
-            } else {
-                (*line).to_string()
-            };
-
-            let _ = writeln!(output, "L{line_num}: {formatted_line}\n");
-        }
-        if selected_lines.len() < total_lines {
-            let () = write!(
-                output,
-                "\n[Showing lines {}-{} of {} total]",
-                input.offset,
-                start_idx + selected_lines.len(),
-                total_lines
-            )
-            .unwrap();
-        }
-        Ok(output)
+        Ok(content.to_string())
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

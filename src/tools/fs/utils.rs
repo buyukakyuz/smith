@@ -63,6 +63,22 @@ pub fn validate_file_size(path: &Path, tool_type: &ToolType) -> Result<u64> {
     Ok(size)
 }
 
+pub fn atomic_write(path: &Path, content: &str) -> std::io::Result<()> {
+    let temp_path = path.with_extension("tmp");
+
+    if let Err(e) = std::fs::write(&temp_path, content) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(e);
+    }
+
+    if let Err(e) = std::fs::rename(&temp_path, path) {
+        let _ = std::fs::remove_file(&temp_path);
+        return Err(e);
+    }
+
+    Ok(())
+}
+
 #[must_use]
 pub fn walk_builder_with_gitignore(path: &Path, respect_gitignore: bool) -> WalkBuilder {
     let mut builder = WalkBuilder::new(path);

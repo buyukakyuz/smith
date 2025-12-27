@@ -1,17 +1,15 @@
 use async_trait::async_trait;
 use schemars::JsonSchema;
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 use serde_json::json;
-use std::time::Instant;
+use std::path::{Path, PathBuf};
 
 use crate::core::error::{AgentError, Result};
 use crate::core::metadata;
-use crate::tools::TypedTool;
+use crate::tools::{ToolType, TypedTool};
 
-use super::{validate_absolute_path, validate_file_size, validate_path_exists};
-use crate::tools::ToolType;
-
-#[derive(Debug, Deserialize, Serialize, JsonSchema)]
+use super::{atomic_write, validate_absolute_path, validate_file_size, validate_path_exists};
+#[derive(Debug, Deserialize, JsonSchema)]
 pub struct UpdateFileInput {
     pub path: String,
     pub old_string: String,
@@ -19,19 +17,126 @@ pub struct UpdateFileInput {
     #[serde(default)]
     pub replace_all: bool,
 }
+enum UpdateResult {
+    NoChange,
+    Updated {
+        path: PathBuf,
+        old_content: String,
+        new_content: String,
+        occurrences: usize,
+    },
+}
 
+enum MatchValidation {
+    NotFound,
+    Ambiguous(usize),
+    Valid(usize),
+}
+fn validate_matches(content: &str, needle: &str, replace_all: bool) -> MatchValidation {
+    let count = content.matches(needle).count();
+
+    match count {
+        0 => MatchValidation::NotFound,
+        1 => MatchValidation::Valid(1),
+        n if replace_all => MatchValidation::Valid(n),
+        n => MatchValidation::Ambiguous(n),
+    }
+}
+
+fn perform_replacement(content: &str, old: &str, new: &str, replace_all: bool) -> String {
+    if replace_all {
+        content.replace(old, new)
+    } else {
+        content.replacen(old, new, 1)
+    }
+}
+
+fn execute_update(
+    path: &Path,
+    old_string: &str,
+    new_string: &str,
+    replace_all: bool,
+) -> Result<UpdateResult> {
+    let old_content = std::fs::read_to_string(path)?;
+
+    let occurrences = match validate_matches(&old_content, old_string, replace_all) {
+        MatchValidation::NotFound => {
+            return Err(AgentError::InvalidToolInput {
+                tool: ToolType::UpdateFile.name().to_string(),
+                reason: format!(
+                    "Could not find old_string in file. Make sure it matches exactly:\n{old_string}"
+                ),
+            });
+        }
+        MatchValidation::Ambiguous(count) => {
+            return Err(AgentError::InvalidToolInput {
+                tool: ToolType::UpdateFile.name().to_string(),
+                reason: format!(
+                    "Found {count} occurrences of old_string. \
+                     Use replace_all=true to replace all, or provide a longer, unique string."
+                ),
+            });
+        }
+        MatchValidation::Valid(count) => count,
+    };
+
+    let new_content = perform_replacement(&old_content, old_string, new_string, replace_all);
+
+    if old_content == new_content {
+        return Ok(UpdateResult::NoChange);
+    }
+
+    atomic_write(path, &new_content)?;
+
+    Ok(UpdateResult::Updated {
+        path: path.to_path_buf(),
+        old_content,
+        new_content,
+        occurrences,
+    })
+}
+fn format_output(result: UpdateResult, path: &Path) -> String {
+    match result {
+        UpdateResult::NoChange => {
+            format!(
+                "No changes made to {} (old_string and new_string are identical)",
+                path.display()
+            )
+        }
+        UpdateResult::Updated {
+            path,
+            old_content,
+            new_content,
+            occurrences,
+        } => {
+            let plural = if occurrences == 1 { "" } else { "s" };
+            let summary = format!(
+                "Updated {} ({occurrences} occurrence{plural})",
+                path.display()
+            );
+
+            let metadata_json = json!({
+                "diff_metadata": {
+                    "path": path.to_string_lossy(),
+                    "old_content": old_content,
+                    "new_content": new_content,
+                }
+            });
+
+            format!(
+                "{summary}\n\n{}",
+                metadata::wrap(&metadata_json.to_string())
+            )
+        }
+    }
+}
+#[derive(Default)]
 pub struct UpdateFileTool;
 
 impl UpdateFileTool {
     #[must_use]
     pub const fn new() -> Self {
         Self
-    }
-}
-
-impl Default for UpdateFileTool {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -49,88 +154,20 @@ impl TypedTool for UpdateFileTool {
     }
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
-        let start_time = Instant::now();
         let path = validate_absolute_path(&input.path, &ToolType::UpdateFile)?;
-
         validate_path_exists(&path, &ToolType::UpdateFile)?;
         validate_file_size(&path, &ToolType::UpdateFile)?;
 
-        let old_content = std::fs::read_to_string(&path)?;
+        let result = execute_update(
+            &path,
+            &input.old_string,
+            &input.new_string,
+            input.replace_all,
+        )?;
 
-        if !old_content.contains(&input.old_string) {
-            return Err(AgentError::InvalidToolInput {
-                tool: ToolType::UpdateFile.name().to_string(),
-                reason: format!(
-                    "Could not find old_string in file. Make sure it matches exactly:\n{}",
-                    input.old_string
-                ),
-            });
-        }
-
-        if !input.replace_all {
-            let match_count = old_content.matches(&input.old_string).count();
-            if match_count > 1 {
-                return Err(AgentError::InvalidToolInput {
-                    tool: ToolType::UpdateFile.name().to_string(),
-                    reason: format!(
-                        "Found {match_count} occurrences of old_string. Use replace_all=true to replace all, or provide a longer, unique string."
-                    ),
-                });
-            }
-        }
-
-        let new_content = if input.replace_all {
-            old_content.replace(&input.old_string, &input.new_string)
-        } else {
-            old_content.replacen(&input.old_string, &input.new_string, 1)
-        };
-
-        if old_content == new_content {
-            return Ok(format!(
-                "No changes made to {} (old_string and new_string are identical)",
-                path.display()
-            ));
-        }
-
-        let temp_path = path.with_extension("tmp");
-
-        std::fs::write(&temp_path, &new_content).inspect_err(|_e| {
-            let _ = std::fs::remove_file(&temp_path);
-        })?;
-
-        std::fs::rename(&temp_path, &path).inspect_err(|_e| {
-            let _ = std::fs::remove_file(&temp_path);
-        })?;
-
-        let _execution_time = start_time.elapsed();
-
-        let occurrences = if input.replace_all {
-            old_content.matches(&input.old_string).count()
-        } else {
-            1
-        };
-
-        let output = format!(
-            "Updated {} ({} occurrence{})",
-            path.display(),
-            occurrences,
-            if occurrences == 1 { "" } else { "s" }
-        );
-
-        let metadata_json = json!({
-            "diff_metadata": {
-                "path": path.to_string_lossy(),
-                "old_content": old_content,
-                "new_content": new_content,
-            }
-        });
-        let output_with_metadata =
-            format!("{output}\n\n{}", metadata::wrap(&metadata_json.to_string()));
-
-        Ok(output_with_metadata)
+        Ok(format_output(result, &path))
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;

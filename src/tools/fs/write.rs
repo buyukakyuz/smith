@@ -2,16 +2,14 @@ use async_trait::async_trait;
 use schemars::JsonSchema;
 use serde::Deserialize;
 use serde_json::json;
-use std::time::Instant;
+use std::path::{Path, PathBuf};
 
 use crate::core::error::{AgentError, Result};
 use crate::core::metadata;
-use crate::tools::ToolType;
-use crate::tools::TypedTool;
+use crate::tools::{ToolType, TypedTool};
 
 use super::constants::MAX_WRITE_SIZE;
-use super::validate_absolute_path;
-
+use super::{atomic_write, validate_absolute_path};
 #[derive(Debug, Deserialize, JsonSchema)]
 pub struct WriteFileInput {
     pub path: String,
@@ -23,19 +21,98 @@ pub struct WriteFileInput {
 const fn default_create_dirs() -> bool {
     true
 }
+struct WriteResult {
+    path: PathBuf,
+    bytes_written: usize,
+    line_count: usize,
+    old_content: Option<String>,
+    new_content: String,
+}
+fn validate_content_size(content: &str) -> Result<()> {
+    if content.len() > MAX_WRITE_SIZE {
+        return Err(AgentError::InvalidToolInput {
+            tool: ToolType::WriteFile.name().to_string(),
+            reason: format!(
+                "Content too large: {} bytes (max: {MAX_WRITE_SIZE} bytes)",
+                content.len()
+            ),
+        });
+    }
+    Ok(())
+}
 
+fn ensure_parent_directory(path: &Path, create: bool) -> Result<()> {
+    let Some(parent) = path.parent() else {
+        return Ok(());
+    };
+
+    if parent.exists() {
+        return Ok(());
+    }
+
+    if create {
+        std::fs::create_dir_all(parent)?;
+    } else {
+        return Err(AgentError::InvalidToolInput {
+            tool: ToolType::WriteFile.name().to_string(),
+            reason: format!(
+                "Parent directory does not exist: {}. Use create_dirs: true to create it.",
+                parent.display()
+            ),
+        });
+    }
+
+    Ok(())
+}
+
+fn execute_write(path: &Path, content: String, create_dirs: bool) -> Result<WriteResult> {
+    validate_content_size(&content)?;
+    ensure_parent_directory(path, create_dirs)?;
+
+    let old_content = path
+        .is_file()
+        .then(|| std::fs::read_to_string(path).ok())
+        .flatten();
+
+    atomic_write(path, &content)?;
+
+    Ok(WriteResult {
+        path: path.to_path_buf(),
+        bytes_written: content.len(),
+        line_count: content.lines().count(),
+        old_content,
+        new_content: content,
+    })
+}
+
+fn format_output(result: WriteResult) -> String {
+    let summary = format!(
+        "Wrote {} bytes ({} lines) to {}",
+        result.bytes_written,
+        result.line_count,
+        result.path.display()
+    );
+
+    let metadata_json = json!({
+        "diff_metadata": {
+            "path": result.path.to_string_lossy(),
+            "old_content": result.old_content.unwrap_or_default(),
+            "new_content": result.new_content,
+        }
+    });
+
+    format!(
+        "{summary}\n\n{}",
+        metadata::wrap(&metadata_json.to_string())
+    )
+}
+#[derive(Default)]
 pub struct WriteFileTool;
 
 impl WriteFileTool {
     #[must_use]
     pub const fn new() -> Self {
         Self
-    }
-}
-
-impl Default for WriteFileTool {
-    fn default() -> Self {
-        Self::new()
     }
 }
 
@@ -52,82 +129,11 @@ impl TypedTool for WriteFileTool {
     }
 
     async fn execute_typed(&self, input: Self::Input) -> Result<String> {
-        let start_time = Instant::now();
         let path = validate_absolute_path(&input.path, &ToolType::WriteFile)?;
-
-        if input.content.len() > MAX_WRITE_SIZE {
-            return Err(AgentError::InvalidToolInput {
-                tool: ToolType::WriteFile.name().to_string(),
-                reason: format!(
-                    "Content too large: {} bytes (max: {} bytes)",
-                    input.content.len(),
-                    MAX_WRITE_SIZE
-                ),
-            });
-        }
-
-        let old_content = if path.exists() {
-            std::fs::read_to_string(&path).ok()
-        } else {
-            None
-        };
-
-        if input.create_dirs {
-            if let Some(parent) = path.parent() {
-                std::fs::create_dir_all(parent)?;
-            }
-        } else if let Some(parent) = path.parent()
-            && !parent.exists()
-        {
-            return Err(AgentError::InvalidToolInput {
-                tool: ToolType::WriteFile.name().to_string(),
-                reason: format!(
-                    "Parent directory does not exist: {}. Use create_dirs: true to create it.",
-                    parent.display()
-                ),
-            });
-        }
-
-        let temp_path = path.with_extension("tmp");
-
-        std::fs::write(&temp_path, &input.content).inspect_err(|_e| {
-            let _ = std::fs::remove_file(&temp_path);
-        })?;
-
-        std::fs::rename(&temp_path, &path).inspect_err(|_e| {
-            let _ = std::fs::remove_file(&temp_path);
-        })?;
-
-        let metadata = std::fs::metadata(&path)?;
-        let file_size = metadata.len();
-        let line_count = input.content.lines().count();
-
-        let _execution_time = start_time.elapsed();
-
-        let output = format!(
-            "Wrote {} bytes ({} lines) to {}",
-            file_size,
-            line_count,
-            path.display()
-        );
-
-        let output_with_metadata = if old_content.is_some() || !input.content.is_empty() {
-            let metadata_json = json!({
-                "diff_metadata": {
-                    "path": path.to_string_lossy(),
-                    "old_content": old_content.unwrap_or_default(),
-                    "new_content": input.content,
-                }
-            });
-            format!("{output}\n\n{}", metadata::wrap(&metadata_json.to_string()))
-        } else {
-            output
-        };
-
-        Ok(output_with_metadata)
+        let result = execute_write(&path, input.content, input.create_dirs)?;
+        Ok(format_output(result))
     }
 }
-
 #[cfg(test)]
 mod tests {
     use super::*;
